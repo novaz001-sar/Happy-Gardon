@@ -1,0 +1,2720 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Gardon Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Microsoft YaHei', sans-serif; }
+        .tab-button.active { background-color: #3b82f6; color: white; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 160px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -80px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+        }
+        .sprite-upload-container {
+            cursor: pointer;
+            border: 2px dashed #ccc;
+            position: relative;
+        }
+        .sprite-upload-container:hover {
+            border-color: #3b82f6;
+        }
+        .sprite-upload-container .overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.75rem;
+            text-align: center;
+        }
+        .sprite-upload-container:hover .overlay {
+            opacity: 1;
+        }
+        #quest-list-editor button:disabled i { color: #d1d5db; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<div id="app-container" class="flex h-screen overflow-hidden">
+    <aside class="w-96 bg-white p-4 overflow-y-auto shadow-lg">
+        <h1 class="text-2xl font-bold text-blue-600 mb-4" data-lang-key="editor_title">Happy Gardon Editor <i class="fa-solid fa-seedling"></i></h1>
+
+        <div class="mb-4 border-b border-gray-200">
+            <nav class="flex space-x-2" id="editor-tabs">
+                <button data-tab="map" class="tab-button active flex-1 py-2 px-4 rounded-t-lg transition-colors duration-200" data-lang-key="tab_map">地图</button>
+                <button data-tab="player" class="tab-button flex-1 py-2 px-4 rounded-t-lg transition-colors duration-200" data-lang-key="tab_player">玩家</button>
+                <button data-tab="objects" class="tab-button flex-1 py-2 px-4 rounded-t-lg transition-colors duration-200" data-lang-key="tab_objects">对象</button>
+            </nav>
+        </div>
+
+        <div id="map-tab" class="space-y-4">
+            <h2 class="text-lg font-semibold border-b pb-2" data-lang-key="map_management">地图管理</h2>
+            <div class="flex items-center space-x-2">
+                <label for="map-layer" class="font-medium" data-lang-key="current_layer">当前层:</label>
+                <select id="map-layer" class="p-2 border rounded-md bg-gray-50 flex-grow"></select>
+                <button id="add-layer" class="p-2 bg-green-500 text-white rounded-md hover:bg-green-600"><i class="fas fa-plus"></i></button>
+                <button id="delete-layer" class="p-2 bg-red-500 text-white rounded-md hover:bg-red-600"><i class="fas fa-trash"></i></button>
+            </div>
+            <div>
+                <label for="map-width" class="block font-medium" data-lang-key="map_width">地图宽度 (单元格):</label>
+                <input type="number" id="map-width" value="20" class="w-full p-2 border rounded-md">
+            </div>
+            <div>
+                <label for="map-height" class="block font-medium" data-lang-key="map_height">地图高度 (单元格):</label>
+                <input type="number" id="map-height" value="15" class="w-full p-2 border rounded-md">
+            </div>
+            <button id="resize-map" class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600" data-lang-key="apply_size">应用尺寸</button>
+            
+            <h2 class="text-lg font-semibold border-b pb-2 pt-4" data-lang-key="game_settings">游戏设置</h2>
+             <div class="space-y-2">
+                <div class="flex items-center">
+                    <input type="checkbox" id="countdown-enabled" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="countdown-enabled" class="ml-2 block text-sm font-medium" data-lang-key="enable_countdown">启用倒计时</label>
+                </div>
+                <div>
+                    <label for="countdown-time" class="block font-medium" data-lang-key="countdown_duration">倒计时长 (秒):</label>
+                    <input type="number" id="countdown-time" value="120" min="1" class="w-full p-2 border rounded-md">
+                </div>
+            </div>
+
+            <h2 class="text-lg font-semibold border-b pb-2 pt-4" data-lang-key="brush_tools">笔刷工具</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div id="brush-path" class="border-2 border-blue-500 p-2 rounded-md text-center cursor-pointer bg-blue-100">
+                    <p data-lang-key="brush_path">路径</p>
+                    <img id="path-preview" src="https://placehold.co/64x64/a3e635/4d7c0f?text=Path" class="w-16 h-16 mx-auto mt-2 object-cover rounded">
+                    <input type="file" id="path-texture" class="hidden" accept="image/*">
+                </div>
+                <div id="brush-wall" class="border-2 border-gray-400 p-2 rounded-md text-center cursor-pointer">
+                    <p data-lang-key="brush_wall">墙壁</p>
+                    <img id="wall-preview" src="https://placehold.co/64x64/78716c/e7e5e4?text=Wall" class="w-16 h-16 mx-auto mt-2 object-cover rounded">
+                    <input type="file" id="wall-texture" class="hidden" accept="image/*">
+                </div>
+                 <div id="brush-eraser" class="border-2 border-gray-400 p-2 rounded-md text-center cursor-pointer">
+                    <p data-lang-key="brush_eraser">橡皮擦</p>
+                    <i class="fas fa-eraser text-4xl mt-4 text-gray-500"></i>
+                </div>
+            </div>
+        </div>
+
+        <div id="player-tab" class="space-y-4 hidden">
+             <h2 class="text-lg font-semibold border-b pb-2" data-lang-key="player_attributes">玩家属性</h2>
+            <div>
+                <label for="player-hp" class="block font-medium" data-lang-key="player_hp">生命值 (HP):</label>
+                <input type="number" id="player-hp" value="100" class="w-full p-2 border rounded-md">
+            </div>
+             <div>
+                <label for="player-size" class="block font-medium" data-lang-key="player_size">大小 (单元格):</label>
+                <input type="number" id="player-size" value="1" step="0.1" class="w-full p-2 border rounded-md">
+            </div>
+            <div>
+                <label for="player-x" class="block font-medium" data-lang-key="player_pos_x">位置 X (单元格):</label>
+                <input type="number" id="player-x" value="1" class="w-full p-2 border rounded-md">
+            </div>
+            <div>
+                <label for="player-y" class="block font-medium" data-lang-key="player_pos_y">位置 Y (单元格):</label>
+                <input type="number" id="player-y" value="1" class="w-full p-2 border rounded-md">
+            </div>
+            <div>
+                <label for="player-layer" class="block font-medium" data-lang-key="player_layer">所在层数:</label>
+                <input type="number" id="player-layer" value="1" min="1" class="w-full p-2 border rounded-md">
+            </div>
+            <h2 class="text-lg font-semibold border-b pb-2" data-lang-key="player_animation">动画帧</h2>
+            <div id="player-animation-grid" class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-1 items-center">
+                </div>
+        </div>
+
+        <div id="objects-tab" class="space-y-4 hidden">
+            <h2 class="text-lg font-semibold border-b pb-2" data-lang-key="add_object">添加对象</h2>
+            <div class="grid grid-cols-2 gap-2">
+                <button id="add-npc-btn" class="w-full bg-yellow-500 text-white p-2 rounded-md hover:bg-yellow-600" data-lang-key="add_npc">添加 NPC</button>
+                <button id="add-dialogue-npc-btn" class="w-full bg-sky-500 text-white p-2 rounded-md hover:bg-sky-600" data-lang-key="add_dialogue_npc">添加剧情NPC</button>
+                <button id="add-gem-btn" class="w-full bg-purple-500 text-white p-2 rounded-md hover:bg-purple-600" data-lang-key="add_gem">添加宝石</button>
+                <button id="add-scenery-btn" class="w-full bg-orange-500 text-white p-2 rounded-md hover:bg-orange-600" data-lang-key="add_scenery">添加障碍</button>
+                <button id="add-portal-btn" class="w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600" data-lang-key="add_portal">添加传送门</button>
+                <button id="add-background-btn" class="w-full bg-cyan-500 text-white p-2 rounded-md hover:bg-cyan-600" data-lang-key="add_background">添加背景</button>
+                <button id="add-shop-btn" class="w-full bg-pink-500 text-white p-2 rounded-md hover:bg-pink-600" data-lang-key="add_shop">添加商店</button>
+            </div>
+            <h2 class="text-lg font-semibold border-b pb-2 pt-4" data-lang-key="object_list">对象列表</h2>
+            <div id="object-list" class="space-y-2 max-h-60 overflow-y-auto bg-gray-50 p-2 rounded-md">
+                </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col p-4 relative">
+        <div id="game-ui-overlay" class="absolute top-0 left-0 p-4 z-10 w-full flex justify-between items-start pointer-events-none">
+            <div id="quest-tracker" class="bg-black bg-opacity-50 text-white p-3 rounded-lg shadow-lg pointer-events-auto hidden">
+                 <h3 id="quest-title" class="font-bold text-lg border-b mb-2 pb-1">任务</h3>
+                 <ul id="quest-objectives" class="space-y-1"></ul>
+            </div>
+             <div id="gem-radar" class="text-purple-600 font-semibold h-6 bg-white bg-opacity-70 px-3 py-1 rounded-full pointer-events-auto"></div>
+        </div>
+
+        <div class="flex justify-between items-center mb-4">
+             <div class="flex items-center space-x-4">
+                <div class="tooltip">
+                    <button id="play-mode-btn" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 flex items-center space-x-2">
+                        <i class="fas fa-play"></i> <span data-lang-key="play_game">开始游戏</span>
+                    </button>
+                     <span class="tooltip-text" data-lang-key="play_tooltip">切换到游戏模式进行测试</span>
+                </div>
+                 <div id="game-hud" class="hidden items-center space-x-4 text-lg">
+                    <span>❤️ HP: <span id="hud-hp">100</span></span>
+                    <span>⚔️ <span data-lang-key="hud_atk">ATK</span>: <span id="hud-atk">10</span></span>
+                    <span>🛡️ <span data-lang-key="hud_def">DEF</span>: <span id="hud-def">0</span></span>
+                    <span>💎 宝石: <span id="hud-gems">0/0</span></span>
+                    <span>💰 <span data-lang-key="hud_bounty">赏金</span>: <span id="hud-bounty">0</span></span>
+                    <span id="hud-timer-container" class="hidden">⏰ <span data-lang-key="hud_time">时间</span>: <span id="hud-timer">120</span></span>
+                    <span id="hud-quest-timer-container" class="hidden">🎯 <span data-lang-key="hud_quest_time">任务时间</span>: <span id="hud-quest-timer">0</span></span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                 <button id="save-json-btn" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 flex items-center space-x-2">
+                    <i class="fas fa-save"></i> <span data-lang-key="save_json">保存为 JSON</span>
+                </button>
+                 <button id="import-json-btn" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 flex items-center space-x-2">
+                    <i class="fas fa-upload"></i> <span data-lang-key="import_json">从 JSON 导入</span>
+                </button>
+                <button id="publish-game-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center space-x-2">
+                    <i class="fas fa-rocket"></i> <span data-lang-key="publish_game">发布游戏</span>
+                </button>
+                <button id="fullscreen-play-btn" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 flex items-center space-x-2">
+                    <i class="fas fa-expand"></i> <span data-lang-key="fullscreen_game">全屏游戏</span>
+                </button>
+                <input type="file" id="import-json-input" class="hidden" accept=".json">
+                 <button id="lang-switch-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600 flex items-center space-x-2">
+                    <i class="fas fa-language"></i> <span id="lang-indicator">EN</span>
+                </button>
+            </div>
+        </div>
+        <div id="canvas-container" class="flex-1 bg-white rounded-lg shadow-inner overflow-hidden flex justify-center items-center">
+            <canvas id="editor-canvas" class="bg-green-100"></canvas>
+        </div>
+    </main>
+</div>
+
+<div id="object-edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[150]">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-[600px] max-h-[90vh] overflow-y-auto">
+        <h3 id="modal-title" class="text-xl font-bold mb-4" data-lang-key="edit_object">编辑对象</h3>
+        <div id="modal-content" class="space-y-3"></div>
+        <div class="flex justify-end space-x-2 mt-4">
+            <button id="cancel-edit" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600" data-lang-key="cancel">取消</button>
+            <button id="confirm-edit" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600" data-lang-key="confirm">确认</button>
+        </div>
+    </div>
+</div>
+
+<div id="game-over-modal" class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[150]">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-auto text-center">
+        <h3 id="game-over-title" class="text-3xl font-bold mb-4 text-red-600"></h3>
+        <div id="game-summary-text" class="text-lg space-y-2 mb-6"></div>
+        <button id="close-summary-btn" class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 text-lg" data-lang-key="close_summary">关闭</button>
+    </div>
+</div>
+
+<div id="dialogue-modal" class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-end z-[150] p-10">
+    <div class="bg-white p-4 rounded-lg shadow-xl w-full max-w-4xl border-4 border-blue-300">
+        <div id="dialogue-content" class="flex items-center space-x-4">
+            </div>
+        <div class="flex justify-end mt-4">
+             <button id="dialogue-next-btn" class="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 text-lg" data-lang-key="dialogue_next">继续</button>
+        </div>
+    </div>
+</div>
+
+<div id="shop-modal" class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[150]">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-[500px]">
+        <h3 class="text-2xl font-bold mb-4 border-b pb-2" data-lang-key="shop_title">商店</h3>
+        <div id="shop-items" class="space-y-3 mb-4">
+            </div>
+        <div class="flex justify-end">
+            <button id="close-shop-btn" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600" data-lang-key="shop_close">关闭</button>
+        </div>
+    </div>
+</div>
+
+<div id="quest-selection-modal" class="modal fixed inset-0 bg-black bg-opacity-50 justify-center items-center z-[160]">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-[500px]">
+        <h3 id="quest-selection-title" class="text-2xl font-bold mb-4 border-b pb-2" data-lang-key="quest_selection_title">可领取的任务</h3>
+        <div id="quest-selection-list" class="space-y-2 mb-4">
+            </div>
+        <div class="flex justify-end">
+            <button id="close-quest-selection-btn" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600" data-lang-key="shop_close">关闭</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+const lang = {
+    zh: {
+        editor_title: "花园寻宝编辑器",
+        tab_map: "地图",
+        tab_player: "玩家",
+        tab_objects: "对象",
+        map_management: "地图管理",
+        current_layer: "当前层:",
+        map_width: "地图宽度 (单元格):",
+        map_height: "地图高度 (单元格):",
+        apply_size: "应用尺寸",
+        game_settings: "游戏设置",
+        enable_countdown: "启用倒计时",
+        countdown_duration: "倒计时长 (秒):",
+        brush_tools: "笔刷工具",
+        brush_path: "路径",
+        brush_wall: "墙壁",
+        brush_eraser: "橡皮擦",
+        player_attributes: "玩家属性",
+        player_animation: "动画帧",
+        player_sprite: "玩家形象:",
+        upload_sprite: "上传形象",
+        player_hp: "生命值 (HP):",
+        player_size: "大小 (单元格):",
+        player_pos_x: "位置 X (单元格):",
+        player_pos_y: "位置 Y (单元格):",
+        player_layer: "所在层数:",
+        add_object: "添加对象",
+        add_npc: "添加 NPC",
+        add_dialogue_npc: "添加剧情NPC",
+        add_gem: "添加宝石",
+        add_scenery: "添加障碍",
+        add_background: "添加背景",
+        add_shop: "添加商店",
+        add_portal: "添加传送门",
+        object_list: "对象列表",
+        play_game: "开始游戏",
+        stop_game: "停止游戏",
+        play_tooltip: "切换到游戏模式进行测试",
+        save_json: "保存为 JSON",
+        import_json: "从 JSON 导入",
+        publish_game: "发布游戏",
+        fullscreen_game: "全屏游戏",
+        exit_fullscreen: "退出全屏",
+        target_layer: "目标层:",
+        target_x: "目标 X (单元格):",
+        target_y: "目标 Y (单元格):",
+        cancel: "取消",
+        confirm: "确认",
+        edit_object: "编辑对象",
+        copy_object: "复制对象",
+        delete_object: "删除对象",
+        modal_name: "名称:",
+        modal_sprite: "形象:",
+        modal_pos_x: "位置 X:",
+        modal_pos_y: "位置 Y:",
+        modal_hp: "HP:",
+        modal_damage: "攻击力:",
+        modal_defense: "防御力:",
+        modal_speed: "速度 (秒/格):",
+        modal_size: "大小 (单元格):",
+        modal_width: "宽度 (单元格):",
+        modal_height: "高度 (单元格):",
+        modal_score: "分数:",
+        modal_appear_time: "出现时间 (秒):",
+        modal_duration: "存在时间 (秒):",
+        speaker: "讲述者",
+        speaker_npc: "NPC",
+        speaker_player: "玩家",
+        dialogue_text: "对话文本",
+        dialogue_portrait: "对话头像",
+        default_dialogue: "默认对话",
+        quest_dialogue: "任务领取对话",
+        quest_reward_dialogue: "任务奖励对话",
+        quest_settings: "任务设置",
+        add_quest: "添加新任务",
+        save_quest: "保存任务",
+        edit_quest: "编辑任务",
+        quest_prefix: "任务 #",
+        add_dialogue_line: "添加对话行",
+        quest_title_label: "任务标题:",
+        quest_bounty_label: "任务赏金:",
+        quest_time_limit: "任务时限 (秒, 0为无限制):",
+        quest_collect_gems: "收集宝石:",
+        quest_defeat_npcs: "赶走NPC:",
+        quest_go_to_layer: "前往层:",
+        quest_reach_location: "到达位置 (X, Y, 层):",
+        quest_return_to_npc: "返回并与 {npcName} 对话",
+        layer_prefix: "第 ",
+        layer_suffix: " 层",
+        npc_prefix: "NPC #",
+        dialogue_npc_prefix: "剧情NPC #",
+        gem_prefix: "宝石 #",
+        scenery_prefix: "障碍 #",
+        background_prefix: "背景 #",
+        shop_prefix: "商店 #",
+        portal_prefix: "传送门 #",
+        copy_suffix: " (副本)",
+        object_in_layer: " (层 {layer})",
+        edit_npc_title: "编辑 NPC",
+        edit_dialogue_npc_title: "编辑 剧情NPC",
+        edit_gem_title: "编辑 宝石",
+        edit_scenery_title: "编辑障碍",
+        edit_background_title: "编辑背景",
+        edit_shop_title: "编辑商店",
+        edit_portal_title: "编辑传送门",
+        gem_radar_msg: "宝石出现在第 {layer} 层!",
+        game_over: "游戏结束!",
+        time_up: "时间到!",
+        defeated: "你被打败了!",
+        game_summary_title: "游戏总结",
+        summary_npcs_defeated: "赶跑了 {count} 个调皮小孩",
+        summary_gems_collected: "收集了 {count} 颗宝石",
+        close_summary: "关闭",
+        dialogue_next: "继续",
+        all_gems_found: "恭喜你，找到了所有宝石！",
+        game_published_success: "游戏发布成功！现在可以点击“全屏游戏”来玩了。",
+        error_json_load: "无法加载文件。请确保它是一个有效的编辑器JSON文件。",
+        error_at_least_one_layer: "至少需要保留一个图层！",
+        dir_down: "下",
+        dir_up: "上",
+        dir_left: "左",
+        dir_right: "右",
+        dir_still: "静止",
+        frame1: "帧1",
+        frame2: "帧2",
+        upload_frame: "上传帧",
+        hud_time: "时间",
+        hud_quest_time: "任务时间",
+        hud_bounty: "赏金",
+        hud_atk: "攻击",
+        hud_def: "防御",
+        quest_complete: "任务完成！",
+        quest_failed: "任务失败！",
+        shop_title: "商店",
+        shop_close: "关闭",
+        shop_buy: "购买",
+        shop_item_hp: "提升最大HP (+10)",
+        shop_item_def: "提升防御 (+1)",
+        shop_item_atk: "提升射击伤害 (+5)",
+        shop_cost: "花费: {cost}",
+        not_enough_bounty: "赏金不足！",
+        quest_selection_title: "可领取的任务"
+    },
+    en: {
+        editor_title: "Garden Treasure Editor",
+        tab_map: "Map",
+        tab_player: "Player",
+        tab_objects: "Objects",
+        map_management: "Map Management",
+        current_layer: "Current Layer:",
+        map_width: "Map Width (cells):",
+        map_height: "Map Height (cells):",
+        apply_size: "Apply Size",
+        game_settings: "Game Settings",
+        enable_countdown: "Enable Countdown",
+        countdown_duration: "Countdown (seconds):",
+        brush_tools: "Brush Tools",
+        brush_path: "Path",
+        brush_wall: "Wall",
+        brush_eraser: "Eraser",
+        player_attributes: "Player Attributes",
+        player_animation: "Animation Frames",
+        player_sprite: "Player Sprite:",
+        upload_sprite: "Upload Sprite",
+        player_hp: "Health (HP):",
+        player_size: "Size (cells):",
+        player_pos_x: "Position X (cells):",
+        player_pos_y: "Position Y (cells):",
+        player_layer: "Starts on Layer:",
+        add_object: "Add Object",
+        add_npc: "Add NPC",
+        add_dialogue_npc: "Add Dialogue NPC",
+        add_gem: "Add Gem",
+        add_scenery: "Add Scenery",
+        add_background: "Add Background",
+        add_shop: "Add Shop",
+        add_portal: "Add Portal",
+        object_list: "Object List",
+        play_game: "Play Game",
+        stop_game: "Stop Game",
+        play_tooltip: "Switch to play mode for testing",
+        save_json: "Save as JSON",
+        import_json: "Import from JSON",
+        publish_game: "Publish Game",
+        fullscreen_game: "Fullscreen Game",
+        exit_fullscreen: "Exit Fullscreen",
+        target_layer: "Target Layer:",
+        target_x: "Target X (cell):",
+        target_y: "Target Y (cell):",
+        cancel: "Cancel",
+        confirm: "Confirm",
+        edit_object: "Edit Object",
+        copy_object: "Copy Object",
+        delete_object: "Delete Object",
+        modal_name: "Name:",
+        modal_sprite: "Sprite:",
+        modal_pos_x: "Position X:",
+        modal_pos_y: "Position Y:",
+        modal_hp: "HP:",
+        modal_damage: "Attack:",
+        modal_defense: "Defense:",
+        modal_speed: "Speed (sec/cell):",
+        modal_size: "Size (cells):",
+        modal_width: "Width (cells):",
+        modal_height: "Height (cells):",
+        modal_score: "Score:",
+        modal_appear_time: "Appear Time (sec):",
+        modal_duration: "Duration (sec):",
+        speaker: "Speaker",
+        speaker_npc: "NPC",
+        speaker_player: "Player",
+        dialogue_text: "Dialogue Text",
+        dialogue_portrait: "Dialogue Portrait",
+        default_dialogue: "Default Dialogue",
+        quest_dialogue: "Quest-start Dialogue",
+        quest_reward_dialogue: "Quest-reward Dialogue",
+        quest_settings: "Quest Settings",
+        add_quest: "Add New Quest",
+        save_quest: "Save Quest",
+        edit_quest: "Edit Quest",
+        quest_prefix: "Quest #",
+        add_dialogue_line: "Add Dialogue Line",
+        quest_title_label: "Quest Title:",
+        quest_bounty_label: "Quest Bounty:",
+        quest_time_limit: "Time Limit (sec, 0 for none):",
+        quest_collect_gems: "Collect Gems:",
+        quest_defeat_npcs: "Defeat NPCs:",
+        quest_go_to_layer: "Go to Layer:",
+        quest_reach_location: "Reach Location (X, Y, Layer):",
+        quest_return_to_npc: "Return to {npcName}",
+        layer_prefix: "Layer ",
+        layer_suffix: "",
+        npc_prefix: "NPC #",
+        dialogue_npc_prefix: "Dialogue NPC #",
+        gem_prefix: "Gem #",
+        scenery_prefix: "Scenery #",
+        background_prefix: "Background #",
+        shop_prefix: "Shop #",
+        portal_prefix: "Portal #",
+        copy_suffix: " (Copy)",
+        object_in_layer: " (Layer {layer})",
+        edit_npc_title: "Edit NPC",
+        edit_dialogue_npc_title: "Edit Dialogue NPC",
+        edit_gem_title: "Edit Gem",
+        edit_scenery_title: "Edit Scenery",
+        edit_background_title: "Edit Background",
+        edit_shop_title: "Edit Shop",
+        edit_portal_title: "Edit Portal",
+        gem_radar_msg: "A gem has appeared on Layer {layer}!",
+        game_over: "Game Over!",
+        time_up: "Time's Up!",
+        defeated: "You were defeated!",
+        game_summary_title: "Game Summary",
+        summary_npcs_defeated: "Defeated {count} naughty kids",
+        summary_gems_collected: "Collected {count} gems",
+        close_summary: "Close",
+        dialogue_next: "Next",
+        all_gems_found: "Congratulations, you found all the gems!",
+        game_published_success: "Game published successfully! You can now click 'Fullscreen Game' to play.",
+        error_json_load: "Failed to load file. Please ensure it is a valid editor JSON file.",
+        error_at_least_one_layer: "You must keep at least one layer!",
+        dir_down: "Down",
+        dir_up: "Up",
+        dir_left: "Left",
+        dir_right: "Right",
+        dir_still: "Still",
+        frame1: "Frame 1",
+        frame2: "Frame 2",
+        upload_frame: "Upload Frame",
+        hud_time: "Time",
+        hud_quest_time: "Quest Time",
+        hud_bounty: "Bounty",
+        hud_atk: "ATK",
+        hud_def: "DEF",
+        quest_complete: "Quest Complete!",
+        quest_failed: "Quest Failed!",
+        shop_title: "Shop",
+        shop_close: "Close",
+        shop_buy: "Buy",
+        shop_item_hp: "Upgrade Max HP (+10)",
+        shop_item_def: "Upgrade Defense (+1)",
+        shop_item_atk: "Upgrade Shot Dmg (+5)",
+        shop_cost: "Cost: {cost}",
+        not_enough_bounty: "Not enough bounty!",
+        quest_selection_title: "Available Quests"
+    }
+};
+
+class GameEditor {
+    constructor() {
+        this.canvas = document.getElementById('editor-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.editorCellSize = 32;
+        this.cellSize = this.editorCellSize;
+        this.currentLayer = 0;
+        this.activeBrush = 'path';
+        this.isPainting = false;
+        this.isPlaying = false;
+        this.isPausedForDialogue = false;
+        this.dialogueType = 'default';
+        this.isShopOpen = false;
+        this.isFullscreen = false;
+        this.selectedObject = null;
+        this.projectiles = [];
+        this.totalGems = 0;
+        this.defeatedNpcs = 0;
+        this.gameTimerValue = 0;
+        this.activeQuest = null;
+        this.dialogueQueue = [];
+        this.currentDialogueIndex = 0;
+
+        this.textures = {
+            path: new Image(),
+            wall: new Image(),
+        };
+        this.textures.path.src = 'https://placehold.co/64x64/a3e635/4d7c0f?text=Path';
+        this.textures.wall.src = 'https://placehold.co/64x64/78716c/e7e5e4?text=Wall';
+
+        this.keysPressed = {};
+        this.gameTimers = [];
+        this.draggedObject = null;
+        this.currentLang = 'zh';
+
+        this.gameData = {
+            countdown: {
+                enabled: false,
+                duration: 120
+            },
+            player: {
+                x: 1, y: 1,
+                hp: 100,
+                maxHp: 100,
+                defense: 0,
+                shootDamage: 10,
+                bounty: 0,
+                size: 1,
+                dir: 'down',
+                layer: 0,
+                sprites: this.createAnimationSpriteSet(),
+                animationFrame: 0,
+                animationTimer: 0,
+                isMoving: false,
+                shootCooldown: 0,
+                shootingTimer: 0,
+            },
+            maps: [{
+                width: 20,
+                height: 15,
+                tiles: [],
+            }],
+            objects: [],
+        };
+        
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.initializeMap(0);
+        this.updateLayerSelector();
+        this.buildAnimationGrid('player', this.gameData.player);
+        this.resizeCanvas();
+        this.setLanguage(this.currentLang);
+        this.draw();
+        
+        this.lastTime = 0;
+        this.gameLoop = this.gameLoop.bind(this);
+        requestAnimationFrame(this.gameLoop);
+    }
+    
+    createAnimationSpriteSet(placeholder = 'https://placehold.co/64x64/cccccc/969696?text=Sprite') {
+        const sprites = { down: [], up: [], left: [], right: [] };
+        for (const dir in sprites) {
+            for (let i = 0; i < 2; i++) {
+                const img = new Image();
+                img.src = placeholder;
+                sprites[dir].push(img);
+            }
+        }
+        return sprites;
+    }
+    
+    createSingleAnimationSpriteSet(placeholder = 'https://placehold.co/64x64/cccccc/969696?text=Sprite') {
+        const sprites = { still: [] };
+        for (let i = 0; i < 2; i++) {
+            const img = new Image();
+            img.src = placeholder;
+            sprites.still.push(img);
+        }
+        return sprites;
+    }
+
+    setupEventListeners() {
+        // Tabs
+        document.getElementById('editor-tabs').addEventListener('click', e => {
+            if (e.target.matches('button[data-tab]')) {
+                this.switchTab(e.target.dataset.tab);
+            }
+        });
+
+        // Map controls
+        document.getElementById('map-layer').addEventListener('change', e => this.changeLayer(parseInt(e.target.value)));
+        document.getElementById('add-layer').addEventListener('click', () => this.addLayer());
+        document.getElementById('delete-layer').addEventListener('click', () => this.deleteLayer());
+        document.getElementById('resize-map').addEventListener('click', () => this.resizeMap());
+
+        // Game settings
+        document.getElementById('countdown-enabled').addEventListener('change', e => {
+            this.gameData.countdown.enabled = e.target.checked;
+        });
+        document.getElementById('countdown-time').addEventListener('change', e => {
+            this.gameData.countdown.duration = parseInt(e.target.value) || 120;
+        });
+
+        // Brush selection
+        document.getElementById('brush-path').addEventListener('click', () => this.selectBrush('path'));
+        document.getElementById('brush-wall').addEventListener('click', () => this.selectBrush('wall'));
+        document.getElementById('brush-eraser').addEventListener('click', () => this.selectBrush('eraser'));
+
+        // Texture uploads
+        document.getElementById('path-preview').addEventListener('click', () => document.getElementById('path-texture').click());
+        document.getElementById('wall-preview').addEventListener('click', () => document.getElementById('wall-texture').click());
+        this.setupTextureUpload('path-texture', this.textures.path, 'path-preview');
+        this.setupTextureUpload('wall-texture', this.textures.wall, 'wall-preview');
+        
+        // Player settings
+        document.getElementById('player-hp').addEventListener('change', e => {
+            this.gameData.player.maxHp = parseInt(e.target.value) || 100;
+        });
+        document.getElementById('player-size').addEventListener('change', e => {
+            this.gameData.player.size = parseFloat(e.target.value) || 1;
+            this.draw();
+        });
+        document.getElementById('player-x').addEventListener('change', e => {
+            this.gameData.player.x = parseInt(e.target.value) || 1;
+            this.draw();
+        });
+        document.getElementById('player-y').addEventListener('change', e => {
+            this.gameData.player.y = parseInt(e.target.value) || 1;
+            this.draw();
+        });
+        document.getElementById('player-layer').addEventListener('change', e => {
+            const layerValue = parseInt(e.target.value, 10) - 1;
+            if (layerValue >= 0 && layerValue < this.gameData.maps.length) {
+                this.gameData.player.layer = layerValue;
+            } else {
+                e.target.value = this.gameData.player.layer + 1;
+            }
+            this.draw();
+        });
+        
+        // Object operations
+        document.getElementById('add-npc-btn').addEventListener('click', () => this.addObject('npc'));
+        document.getElementById('add-dialogue-npc-btn').addEventListener('click', () => this.addObject('dialogueNpc'));
+        document.getElementById('add-gem-btn').addEventListener('click', () => this.addObject('gem'));
+        document.getElementById('add-scenery-btn').addEventListener('click', () => this.addObject('scenery'));
+        document.getElementById('add-portal-btn').addEventListener('click', () => this.addObject('portal'));
+        document.getElementById('add-background-btn').addEventListener('click', () => this.addObject('background'));
+        document.getElementById('add-shop-btn').addEventListener('click', () => this.addObject('shop'));
+
+        document.getElementById('object-list').addEventListener('click', e => {
+            const editBtn = e.target.closest('.edit-obj-btn');
+            const deleteBtn = e.target.closest('.delete-obj-btn');
+            const copyBtn = e.target.closest('.copy-obj-btn');
+            if (editBtn) {
+                this.selectedObject = this.gameData.objects.find(obj => obj.id === editBtn.dataset.id);
+                this.openObjectEditModal();
+            }
+            if (deleteBtn) {
+                this.gameData.objects = this.gameData.objects.filter(obj => obj.id !== deleteBtn.dataset.id);
+                this.updateObjectList();
+                this.draw();
+            }
+            if (copyBtn) {
+                this.copyObject(copyBtn.dataset.id);
+            }
+        });
+
+        // Canvas interactions
+        this.canvas.addEventListener('mousedown', e => {
+            if (this.isPlaying) return;
+            const { x, y } = this.getMouseGridPos(e);
+            
+            this.draggedObject = this.getObjectAt(x, y, this.currentLayer);
+            if (this.draggedObject) return;
+
+            this.isPainting = true;
+            this.paintTile(x, y);
+        });
+        this.canvas.addEventListener('mousemove', e => {
+            if (this.isPlaying) return;
+            const { x, y } = this.getMouseGridPos(e);
+            if (this.draggedObject) {
+                this.draggedObject.x = x;
+                this.draggedObject.y = y;
+                this.draggedObject.layer = this.currentLayer;
+
+                if (this.draggedObject === this.gameData.player) {
+                    document.getElementById('player-x').value = x;
+                    document.getElementById('player-y').value = y;
+                    document.getElementById('player-layer').value = this.currentLayer + 1;
+                }
+                this.draw();
+            } else if (this.isPainting) {
+                this.paintTile(x, y);
+            }
+        });
+        this.canvas.addEventListener('mouseup', () => {
+            if (this.draggedObject && ['npc', 'dialogueNpc', 'gem', 'scenery', 'background', 'shop', 'portal'].includes(this.draggedObject.type)) {
+                this.updateObjectList();
+            }
+            this.isPainting = false;
+            this.draggedObject = null;
+        });
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isPainting = false;
+            this.draggedObject = null;
+        });
+
+        // Modal Events
+        document.getElementById('cancel-edit').addEventListener('click', () => this.closeModal('object-edit-modal'));
+        document.getElementById('confirm-edit').addEventListener('click', () => this.confirmObjectEdit());
+        document.getElementById('close-summary-btn').addEventListener('click', () => this.closeModal('game-over-modal'));
+        document.getElementById('dialogue-next-btn').addEventListener('click', () => this.advanceDialogue());
+        document.getElementById('close-shop-btn').addEventListener('click', () => this.closeModal('shop-modal'));
+        document.getElementById('close-quest-selection-btn').addEventListener('click', () => this.closeModal('quest-selection-modal'));
+
+
+        // Game mode and controls
+        document.getElementById('play-mode-btn').addEventListener('click', () => this.togglePlayMode());
+        document.getElementById('fullscreen-play-btn').addEventListener('click', () => this.toggleFullscreen());
+        window.addEventListener('keydown', e => {
+            if (this.isPlaying) {
+                const key = e.key.toLowerCase();
+                if (key === ' ' || key === 'spacebar') {
+                    e.preventDefault();
+                    this.shoot();
+                    return;
+                }
+                this.keysPressed[key] = true;
+                this.handlePlayerMovement(key);
+            }
+        });
+        window.addEventListener('keyup', e => {
+            if (this.isPlaying) {
+                delete this.keysPressed[e.key.toLowerCase()];
+            }
+        });
+
+
+        // Save & Import
+        document.getElementById('save-json-btn').addEventListener('click', () => this.saveGameData());
+        document.getElementById('import-json-btn').addEventListener('click', () => document.getElementById('import-json-input').click());
+        document.getElementById('import-json-input').addEventListener('change', e => this.loadGameData(e));
+        
+        document.getElementById('publish-game-btn').addEventListener('click', () => this.saveGameForPlay());
+        
+        // Language
+        document.getElementById('lang-switch-btn').addEventListener('click', () => this.toggleLanguage());
+    }
+
+    // 切换标签页
+    switchTab(tabName) {
+        document.querySelectorAll('[id$="-tab"]').forEach(tab => tab.classList.add('hidden'));
+        document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`button[data-tab="${tabName}"]`).classList.add('active');
+    }
+    
+    // 切换语言
+    toggleLanguage() {
+        const newLang = this.currentLang === 'zh' ? 'en' : 'zh';
+        this.setLanguage(newLang);
+    }
+    
+    setLanguage(langCode) {
+        this.currentLang = langCode;
+        const langDict = lang[langCode];
+        
+        document.querySelectorAll('[data-lang-key]').forEach(el => {
+            const key = el.dataset.langKey;
+            if (langDict[key]) {
+                 if (el.matches('button, p, h1, h2, h3, label, div, span')) {
+                    const icon = el.querySelector('i');
+                    const text = langDict[key];
+                    // A bit brittle, but handles the most common cases of text + icon in our UI
+                     if (el.matches('button span') || el.matches('#gem-radar') || el.matches('#lang-indicator')) {
+                         el.textContent = text;
+                     } else {
+                         el.innerHTML = icon ? (el.id === 'play-mode-btn' ? `${icon.outerHTML} <span>${text}</span>` : `${text} ${icon.outerHTML}`) : text;
+                     }
+                 }
+            }
+        });
+        
+        const playBtn = document.getElementById('play-mode-btn');
+        const playBtnText = this.isPlaying ? langDict.stop_game : langDict.play_game;
+        playBtn.innerHTML = `<i class="fas ${this.isPlaying ? 'fa-stop' : 'fa-play'}"></i> <span data-lang-key="play_game">${playBtnText}</span>`;
+
+        document.getElementById('lang-indicator').textContent = langCode === 'zh' ? 'EN' : '中文';
+        
+        this.updateLayerSelector();
+        this.updateObjectList();
+        this.buildAnimationGrid('player', this.gameData.player);
+    }
+    
+    // 获取鼠标在网格上的位置
+    getMouseGridPos(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / this.cellSize);
+        const y = Math.floor((e.clientY - rect.top) / this.cellSize);
+        return { x, y };
+    }
+    
+    getObjectAt(gridX, gridY, layer) {
+        // Check player first
+        const p = this.gameData.player;
+        const pSize = p.size || 1;
+        if (p.layer === layer && gridX >= p.x && gridX < p.x + pSize && gridY >= (p.y - pSize + 1) && gridY < p.y + 1) {
+            return p;
+        }
+        // Then check other objects (reverse order to get topmost)
+        for (let i = this.gameData.objects.length - 1; i >= 0; i--) {
+            const obj = this.gameData.objects[i];
+            const objWidth = obj.width || obj.size || 1;
+            const objHeight = obj.height || obj.size || 1;
+            if (obj.layer === layer && gridX >= obj.x && gridX < obj.x + objWidth && gridY >= obj.y && gridY < obj.y + objHeight) {
+                return obj;
+            }
+        }
+        return null;
+    }
+
+    // 设置纹理上传
+    setupTextureUpload(inputId, textureImage, previewId) {
+        const input = document.getElementById(inputId);
+        input.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    textureImage.src = reader.result;
+                    document.getElementById(previewId).src = reader.result;
+                    textureImage.onload = () => this.draw();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // 地图操作
+    initializeMap(layerIndex) {
+        const map = this.gameData.maps[layerIndex];
+        map.tiles = Array(map.width * map.height).fill(1); // 1 = path
+    }
+
+    addLayer() {
+        this.gameData.maps.push({
+            width: 20,
+            height: 15,
+            tiles: [],
+        });
+        const newLayerIndex = this.gameData.maps.length - 1;
+        this.initializeMap(newLayerIndex);
+        this.updateLayerSelector();
+        this.changeLayer(newLayerIndex);
+    }
+
+    deleteLayer() {
+        if (this.gameData.maps.length > 1) {
+            this.gameData.maps.splice(this.currentLayer, 1);
+            this.gameData.objects = this.gameData.objects.filter(obj => obj.layer !== this.currentLayer);
+            this.currentLayer = Math.max(0, this.currentLayer - 1);
+            this.updateLayerSelector();
+            this.updateObjectList();
+            this.resizeCanvas();
+        } else {
+            alert(lang[this.currentLang].error_at_least_one_layer);
+        }
+    }
+    
+    resizeMap() {
+        const map = this.gameData.maps[this.currentLayer];
+        map.width = parseInt(document.getElementById('map-width').value) || 20;
+        map.height = parseInt(document.getElementById('map-height').value) || 15;
+        this.initializeMap(this.currentLayer);
+        this.resizeCanvas();
+    }
+    
+    resizeCanvas() {
+        const map = this.gameData.maps[this.currentLayer];
+        this.canvas.width = map.width * this.cellSize;
+        this.canvas.height = map.height * this.cellSize;
+        this.draw();
+    }
+
+    changeLayer(layerIndex) {
+        this.currentLayer = layerIndex;
+        document.getElementById('map-width').value = this.gameData.maps[this.currentLayer].width;
+        document.getElementById('map-height').value = this.gameData.maps[this.currentLayer].height;
+        this.resizeCanvas();
+    }
+    
+    updateLayerSelector() {
+        const selector = document.getElementById('map-layer');
+        selector.innerHTML = '';
+        this.gameData.maps.forEach((_, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = `${lang[this.currentLang].layer_prefix}${index + 1}${lang[this.currentLang].layer_suffix}`;
+            selector.appendChild(option);
+        });
+        selector.value = this.currentLayer;
+    }
+    
+    // 笔刷和绘制
+    selectBrush(brush) {
+        this.activeBrush = brush;
+        document.querySelectorAll('[id^="brush-"]').forEach(b => {
+            b.classList.remove('border-blue-500', 'bg-blue-100');
+            b.classList.add('border-gray-400');
+        });
+        document.getElementById(`brush-${brush}`).classList.add('border-blue-500', 'bg-blue-100');
+        document.getElementById(`brush-${brush}`).classList.remove('border-gray-400');
+    }
+    
+    paintTile(x, y) {
+        const map = this.gameData.maps[this.currentLayer];
+        if (x < 0 || x >= map.width || y < 0 || y >= map.height) return;
+
+        const tileIndex = y * map.width + x;
+        
+        switch (this.activeBrush) {
+            case 'path': map.tiles[tileIndex] = 1; break;
+            case 'wall': map.tiles[tileIndex] = 2; break;
+            case 'eraser': map.tiles[tileIndex] = 0; break;
+        }
+        this.draw();
+    }
+
+    // 弹窗操作
+    openModal(id) {
+        if (id === 'shop-modal') this.isShopOpen = true;
+        document.getElementById(id).classList.add('active');
+    }
+    closeModal(id) {
+        if (id === 'shop-modal') this.isShopOpen = false;
+        document.getElementById(id).classList.remove('active');
+    }
+
+    // 对象管理
+    addObject(type) {
+        const newObj = {
+            id: `obj_${Date.now()}_${Math.random()}`,
+            type,
+            x: 1, y: 1,
+            layer: this.currentLayer,
+        };
+
+        if (type === 'npc') {
+            const npcCount = this.gameData.objects.filter(o => o.type === 'npc').length + 1;
+            Object.assign(newObj, { 
+                name: `${lang[this.currentLang].npc_prefix}${npcCount}`, 
+                hp: 50, currentHp: 50, damage: 10, defense: 0, speed: 1, size: 1, moveCooldown: 0,
+                appearTime: 0, hidden: false,
+                dir: 'down', sprites: this.createAnimationSpriteSet(), animationFrame: 0, animationTimer: 0, isMoving: false
+            });
+        } else if (type === 'dialogueNpc') {
+             const npcCount = this.gameData.objects.filter(o => o.type === 'dialogueNpc').length + 1;
+            Object.assign(newObj, { 
+                name: `${lang[this.currentLang].dialogue_npc_prefix}${npcCount}`, 
+                size: 1,
+                dialogue: [{
+                    speaker: 'npc',
+                    text: '你好!',
+                    portraitSrc: 'https://placehold.co/96x96/a5f3fc/083344?text=NPC'
+                }],
+                quests: [],
+                currentQuestIndex: 0,
+                triggered: false,
+                dir: 'still', sprites: this.createSingleAnimationSpriteSet(), animationFrame: 0, animationTimer: 0, isMoving: false
+            });
+        } else if (type === 'gem') {
+            const gemCount = this.gameData.objects.filter(o => o.type === 'gem').length + 1;
+            newObj.sprite = new Image();
+            newObj.sprite.src = 'https://placehold.co/64x64/a855f7/f3e8ff?text=Gem';
+            Object.assign(newObj, { name: `${lang[this.currentLang].gem_prefix}${gemCount}`, score: 100, appearTime: 0, duration: 60, hidden: false, size: 1 });
+        } else if (type === 'scenery') {
+            const sceneryCount = this.gameData.objects.filter(o => o.type === 'scenery').length + 1;
+            newObj.sprite = new Image();
+            newObj.sprite.src = 'https://placehold.co/128x64/f97316/fed7aa?text=Scenery';
+            Object.assign(newObj, { name: `${lang[this.currentLang].scenery_prefix}${sceneryCount}`, width: 2, height: 1 });
+        } else if (type === 'portal') {
+            const portalCount = this.gameData.objects.filter(o => o.type === 'portal').length + 1;
+            newObj.sprite = new Image();
+            newObj.sprite.src = 'https://placehold.co/64x64/c084fc/f3e8ff?text=Portal';
+            const targetLayer = this.gameData.maps.length > 1 && this.currentLayer === 0 ? 1 : 0;
+            Object.assign(newObj, { 
+                name: `${lang[this.currentLang].portal_prefix}${portalCount}`, 
+                width: 1, height: 1,
+                targetLayer: targetLayer,
+                targetX: 1,
+                targetY: 1
+            });
+        } else if (type === 'shop') {
+            const shopCount = this.gameData.objects.filter(o => o.type === 'shop').length + 1;
+            newObj.sprite = new Image();
+            newObj.sprite.src = 'https://placehold.co/128x128/f472b6/fce7f3?text=Shop';
+            Object.assign(newObj, { name: `${lang[this.currentLang].shop_prefix}${shopCount}`, width: 2, height: 2 });
+        } else { // background
+            const backgroundCount = this.gameData.objects.filter(o => o.type === 'background').length + 1;
+            newObj.sprite = new Image();
+            newObj.sprite.src = 'https://placehold.co/128x128/a3a3a3/e5e5e5?text=BG';
+            Object.assign(newObj, { name: `${lang[this.currentLang].background_prefix}${backgroundCount}`, width: 2, height: 2 });
+        }
+
+
+        this.gameData.objects.push(newObj);
+        this.updateObjectList();
+        this.draw();
+    }
+    
+    copyObject(objectId) {
+        const originalObject = this.gameData.objects.find(obj => obj.id === objectId);
+        if (!originalObject) return;
+
+        const newObjectData = JSON.parse(JSON.stringify(originalObject));
+        const newObject = { ...newObjectData };
+
+        newObject.id = `obj_${Date.now()}_${Math.random()}`;
+        newObject.name = `${originalObject.name} ${lang[this.currentLang].copy_suffix}`;
+        newObject.x += 1;
+        newObject.y += 1;
+
+        if (originalObject.type === 'npc' || originalObject.type === 'dialogueNpc') {
+            newObject.sprites = (originalObject.type === 'npc') ? this.createAnimationSpriteSet() : this.createSingleAnimationSpriteSet();
+            for (const dir in originalObject.sprites) {
+                for (let i = 0; i < 2; i++) {
+                    if (originalObject.sprites[dir] && originalObject.sprites[dir][i]) {
+                        newObject.sprites[dir][i].src = originalObject.sprites[dir][i].src;
+                    }
+                }
+            }
+        } else if (originalObject.sprite) {
+            const newSprite = new Image();
+            newSprite.src = originalObject.sprite.src;
+            newObject.sprite = newSprite;
+        }
+
+        this.gameData.objects.push(newObject);
+        this.updateObjectList();
+        this.draw();
+    }
+
+    updateObjectList() {
+        const list = document.getElementById('object-list');
+        list.innerHTML = '';
+        const langDict = lang[this.currentLang];
+        this.gameData.objects.forEach(obj => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between p-2 bg-white rounded-md shadow-sm';
+            const layerText = langDict.object_in_layer.replace('{layer}', obj.layer + 1);
+            div.innerHTML = `
+                <span>${obj.name}${layerText}</span>
+                <div>
+                    <button data-id="${obj.id}" class="copy-obj-btn text-green-500 hover:text-green-700 mr-2" title="${langDict.copy_object}"><i class="fas fa-copy"></i></button>
+                    <button data-id="${obj.id}" class="edit-obj-btn text-blue-500 hover:text-blue-700 mr-2" title="${langDict.edit_object}"><i class="fas fa-edit"></i></button>
+                    <button data-id="${obj.id}" class="delete-obj-btn text-red-500 hover:text-red-700" title="${langDict.delete_object}"><i class="fas fa-trash"></i></button>
+                </div>`;
+            list.appendChild(div);
+        });
+    }
+
+    openObjectEditModal() {
+        if (!this.selectedObject) return;
+        const modalContent = document.getElementById('modal-content');
+        const { type } = this.selectedObject;
+        const langDict = lang[this.currentLang];
+        
+        let titleKey;
+        if (type === 'npc') titleKey = 'edit_npc_title';
+        else if (type === 'dialogueNpc') titleKey = 'edit_dialogue_npc_title';
+        else if (type === 'gem') titleKey = 'edit_gem_title';
+        else if (type === 'scenery') titleKey = 'edit_scenery_title';
+        else if (type === 'background') titleKey = 'edit_background_title';
+        else if (type === 'shop') titleKey = 'edit_shop_title';
+        else if (type === 'portal') titleKey = 'edit_portal_title';
+        document.getElementById('modal-title').textContent = langDict[titleKey];
+
+        let fields = `
+            <div><label class="block font-medium">${langDict.modal_name}</label><input type="text" id="edit-name" value="${this.selectedObject.name}" class="w-full p-2 border rounded-md"></div>
+            <div><label class="block font-medium">${langDict.modal_pos_x}</label><input type="number" id="edit-x" value="${this.selectedObject.x}" class="w-full p-2 border rounded-md"></div>
+            <div><label class="block font-medium">${langDict.modal_pos_y}</label><input type="number" id="edit-y" value="${this.selectedObject.y}" class="w-full p-2 border rounded-md"></div>`;
+
+        if (type === 'npc') {
+            fields += `
+                <div><label class="block font-medium">${langDict.modal_hp}</label><input type="number" id="edit-hp" value="${this.selectedObject.hp}" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block font-medium">${langDict.modal_damage}</label><input type="number" id="edit-damage" value="${this.selectedObject.damage}" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block font-medium">${langDict.modal_defense}</label><input type="number" id="edit-defense" value="${this.selectedObject.defense || 0}" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block font-medium">${langDict.modal_speed}</label><input type="number" id="edit-speed" value="${this.selectedObject.speed}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <div><label class="block font-medium">${langDict.modal_size}</label><input type="number" id="edit-size" value="${this.selectedObject.size}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <div><label class="block font-medium">${langDict.modal_appear_time}</label><input type="number" id="edit-appearTime" value="${this.selectedObject.appearTime || 0}" class="w-full p-2 border rounded-md"></div>
+                <h3 class="text-lg font-semibold border-b pb-2 pt-2">${langDict.player_animation}</h3>
+                <div id="edit-animation-grid" class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-1 items-center"></div>
+                `;
+        } else if (type === 'dialogueNpc') {
+             fields += `
+                <div><label class="block font-medium">${langDict.modal_size}</label><input type="number" id="edit-size" value="${this.selectedObject.size}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <h3 class="text-lg font-semibold border-b pb-2 pt-2">${langDict.player_animation} (${langDict.dir_still})</h3>
+                <div id="edit-animation-grid" class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-1 items-center"></div>
+                
+                <h3 class="text-lg font-semibold border-b pb-2 pt-4" data-lang-key="default_dialogue"></h3>
+                <div id="dialogue-editor-container" class="space-y-2 border p-2 rounded-md bg-gray-50"></div>
+                <button id="add-dialogue-line-btn" class="mt-2 w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">${langDict.add_dialogue_line}</button>
+
+                <h3 class="text-lg font-semibold border-b pb-2 pt-4">${langDict.quest_settings}</h3>
+                <div id="quest-list-editor" class="space-y-2 border p-2 rounded-md bg-gray-50"></div>
+                <button id="add-quest-btn" class="mt-2 w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600">${langDict.add_quest}</button>
+                
+                <div id="quest-details-editor" class="hidden mt-4 space-y-2 border p-3 rounded-md bg-gray-100">
+                    <input type="hidden" id="editing-quest-index">
+                    <h4 id="quest-editor-title" class="text-md font-semibold"></h4>
+                    <div><label class="block">${langDict.quest_title_label}</label><input type="text" id="quest-title-input" class="w-full p-1 border rounded"></div>
+                    <div><label class="block">${langDict.quest_bounty_label}</label><input type="number" id="quest-bounty" min="0" value="0" class="w-full p-1 border rounded"></div>
+                    <div><label class="block">${langDict.quest_time_limit}</label><input type="number" id="quest-time-limit" min="0" value="0" class="w-full p-1 border rounded"></div>
+                    <div><label class="block">${langDict.quest_collect_gems}</label><input type="number" id="quest-gems" min="0" value="0" class="w-full p-1 border rounded"></div>
+                    <div><label class="block">${langDict.quest_defeat_npcs}</label><input type="number" id="quest-npcs" min="0" value="0" class="w-full p-1 border rounded"></div>
+                    <div><label class="block">${langDict.quest_go_to_layer}</label><input type="number" id="quest-layer" min="1" class="w-full p-1 border rounded"></div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="col-span-3">${langDict.quest_reach_location}</label>
+                        <input type="number" id="quest-loc-x" placeholder="X" class="p-1 border rounded">
+                        <input type="number" id="quest-loc-y" placeholder="Y" class="p-1 border rounded">
+                        <input type="number" id="quest-loc-layer" placeholder="Layer" min="1" class="p-1 border rounded">
+                    </div>
+
+                    <h4 class="text-md font-semibold border-t pt-2 mt-2" data-lang-key="quest_dialogue"></h4>
+                    <div id="quest-dialogue-editor-container" class="space-y-2 border p-2 rounded-md bg-white"></div>
+                    <button id="add-quest-dialogue-line-btn" class="mt-2 w-full bg-sky-500 text-white p-2 rounded-md hover:bg-sky-600">${langDict.add_dialogue_line}</button>
+
+                    <h4 class="text-md font-semibold border-t pt-2 mt-2" data-lang-key="quest_reward_dialogue"></h4>
+                    <div id="quest-reward-dialogue-editor-container" class="space-y-2 border p-2 rounded-md bg-white"></div>
+                    <button id="add-quest-reward-dialogue-line-btn" class="mt-2 w-full bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600">${langDict.add_dialogue_line}</button>
+
+                    <div class="flex justify-end space-x-2">
+                        <button id="cancel-quest-details-btn" class="mt-2 bg-gray-500 text-white px-3 py-1 rounded-md hover:bg-gray-600">${langDict.cancel}</button>
+                        <button id="save-quest-details-btn" class="mt-2 bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600">${langDict.save_quest}</button>
+                    </div>
+                </div>
+                `;
+        } else if (type === 'gem') {
+            fields += `
+                <div>
+                    <label class="block font-medium">${langDict.modal_sprite}</label>
+                    <img id="edit-preview" src="${this.selectedObject.sprite.src}" class="w-24 h-24 mx-auto my-2 border p-1 rounded">
+                    <input type="file" id="edit-sprite" class="hidden" accept="image/*">
+                    <button onclick="document.getElementById('edit-sprite').click()" class="w-full mt-1 bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600">${langDict.upload_sprite}</button>
+                </div>
+                <div><label class="block font-medium">${langDict.modal_score}</label><input type="number" id="edit-score" value="${this.selectedObject.score}" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block font-medium">${langDict.modal_appear_time}</label><input type="number" id="edit-appearTime" value="${this.selectedObject.appearTime}" class="w-full p-2 border rounded-md"></div>
+                <div><label class="block font-medium">${langDict.modal_duration}</label><input type="number" id="edit-duration" value="${this.selectedObject.duration}" class="w-full p-2 border rounded-md"></div>`;
+        } else if (type === 'scenery' || type === 'background' || type === 'shop') {
+             fields += `
+                <div>
+                    <label class="block font-medium">${langDict.modal_sprite}</label>
+                    <img id="edit-preview" src="${this.selectedObject.sprite.src}" class="w-24 h-24 mx-auto my-2 border p-1 rounded">
+                    <input type="file" id="edit-sprite" class="hidden" accept="image/*">
+                    <button onclick="document.getElementById('edit-sprite').click()" class="w-full mt-1 bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600">${langDict.upload_sprite}</button>
+                </div>
+                <div><label class="block font-medium">${langDict.modal_width}</label><input type="number" id="edit-width" value="${this.selectedObject.width || 1}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <div><label class="block font-medium">${langDict.modal_height}</label><input type="number" id="edit-height" value="${this.selectedObject.height || 1}" class="w-full p-2 border rounded-md" step="0.1"></div>`;
+        } else if (type === 'portal') {
+             fields += `
+                <div>
+                    <label class="block font-medium">${langDict.modal_sprite}</label>
+                    <img id="edit-preview" src="${this.selectedObject.sprite.src}" class="w-24 h-24 mx-auto my-2 border p-1 rounded">
+                    <input type="file" id="edit-sprite" class="hidden" accept="image/*">
+                    <button onclick="document.getElementById('edit-sprite').click()" class="w-full mt-1 bg-indigo-500 text-white p-2 rounded-md hover:bg-indigo-600">${langDict.upload_sprite}</button>
+                </div>
+                <div><label class="block font-medium">${langDict.modal_width}</label><input type="number" id="edit-width" value="${this.selectedObject.width || 1}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <div><label class="block font-medium">${langDict.modal_height}</label><input type="number" id="edit-height" value="${this.selectedObject.height || 1}" class="w-full p-2 border rounded-md" step="0.1"></div>
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="text-md font-semibold mb-2">${langDict.set_portal}</h4>
+                    <div><label class="block font-medium">${langDict.target_layer}</label><select id="edit-target-layer" class="w-full p-2 border rounded-md"></select></div>
+                    <div><label class="block font-medium">${langDict.target_x}</label><input type="number" id="edit-target-x" value="${this.selectedObject.targetX}" class="w-full p-2 border rounded-md"></div>
+                    <div><label class="block font-medium">${langDict.target_y}</label><input type="number" id="edit-target-y" value="${this.selectedObject.targetY}" class="w-full p-2 border rounded-md"></div>
+                </div>`;
+        }
+
+        modalContent.innerHTML = fields;
+        
+        if (type === 'npc') {
+            this.buildAnimationGrid('edit', this.selectedObject);
+        } else if (type === 'dialogueNpc') {
+            modalContent.querySelector('[data-lang-key="default_dialogue"]').textContent = langDict.default_dialogue;
+            modalContent.querySelector('[data-lang-key="quest_dialogue"]').textContent = langDict.quest_dialogue;
+            modalContent.querySelector('[data-lang-key="quest_reward_dialogue"]').textContent = langDict.quest_reward_dialogue;
+            this.buildAnimationGrid('edit', this.selectedObject, true);
+            this.buildDialogueEditor('dialogue-editor-container', this.selectedObject.dialogue);
+            this.buildQuestEditor(this.selectedObject);
+            document.getElementById('add-dialogue-line-btn').onclick = () => this.addDialogueLine(this.selectedObject.dialogue, 'dialogue-editor-container');
+            document.getElementById('add-quest-btn').onclick = () => this.addQuest(this.selectedObject);
+        } else if (type === 'portal') {
+            this.setupTextureUpload('edit-sprite', this.selectedObject.sprite, 'edit-preview');
+            const selector = document.getElementById('edit-target-layer');
+            this.gameData.maps.forEach((_, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${lang[this.currentLang].layer_prefix}${index + 1}${lang[this.currentLang].layer_suffix}`;
+                selector.appendChild(option);
+            });
+            selector.value = this.selectedObject.targetLayer;
+        } else if (this.selectedObject.sprite) {
+             this.setupTextureUpload('edit-sprite', this.selectedObject.sprite, 'edit-preview');
+        }
+
+        this.openModal('object-edit-modal');
+    }
+
+    confirmObjectEdit() {
+        if (!this.selectedObject) return;
+        
+        this.selectedObject.name = document.getElementById('edit-name').value;
+        this.selectedObject.x = parseInt(document.getElementById('edit-x').value);
+        this.selectedObject.y = parseInt(document.getElementById('edit-y').value);
+
+        const type = this.selectedObject.type;
+        if (type === 'npc') {
+            this.selectedObject.hp = parseInt(document.getElementById('edit-hp').value);
+            this.selectedObject.damage = parseInt(document.getElementById('edit-damage').value);
+            this.selectedObject.defense = parseInt(document.getElementById('edit-defense').value) || 0;
+            this.selectedObject.speed = parseFloat(document.getElementById('edit-speed').value);
+            this.selectedObject.size = parseFloat(document.getElementById('edit-size').value);
+            this.selectedObject.appearTime = parseInt(document.getElementById('edit-appearTime').value);
+        } else if (type === 'dialogueNpc') {
+            this.selectedObject.size = parseFloat(document.getElementById('edit-size').value);
+            this.saveDialogue('dialogue-editor-container', this.selectedObject.dialogue);
+        } else if (type === 'gem') { 
+            this.selectedObject.score = parseInt(document.getElementById('edit-score').value);
+            this.selectedObject.appearTime = parseInt(document.getElementById('edit-appearTime').value);
+            this.selectedObject.duration = parseInt(document.getElementById('edit-duration').value);
+        } else if (type === 'scenery' || type === 'background' || type === 'shop') {
+            this.selectedObject.width = parseFloat(document.getElementById('edit-width').value);
+            this.selectedObject.height = parseFloat(document.getElementById('edit-height').value);
+        } else if (type === 'portal') {
+            this.selectedObject.width = parseFloat(document.getElementById('edit-width').value);
+            this.selectedObject.height = parseFloat(document.getElementById('edit-height').value);
+            this.selectedObject.targetLayer = parseInt(document.getElementById('edit-target-layer').value);
+            this.selectedObject.targetX = parseInt(document.getElementById('edit-target-x').value);
+            this.selectedObject.targetY = parseInt(document.getElementById('edit-target-y').value);
+        }
+
+        this.closeModal('object-edit-modal');
+        this.updateObjectList();
+        this.draw();
+        this.selectedObject = null;
+    }
+    
+    buildAnimationGrid(prefix, entity, singleDirection = false) {
+        const grid = document.getElementById(`${prefix}-animation-grid`);
+        if (!grid) return;
+        grid.innerHTML = '';
+        const langDict = lang[this.currentLang];
+        const directions = singleDirection ? ['still'] : ['down', 'up', 'left', 'right'];
+        
+        // Header
+        grid.innerHTML += `
+            <div></div>
+            <div class="font-semibold text-center">${langDict.frame1}</div>
+            <div></div>
+            <div class="font-semibold text-center">${langDict.frame2}</div>
+        `;
+        
+        directions.forEach(dir => {
+            const dirKey = `dir_${dir}`;
+            grid.innerHTML += `<div class="font-semibold text-right pr-2">${singleDirection ? '' : langDict[dirKey]}</div>`;
+
+            for (let i = 0; i < 2; i++) {
+                const frameId = `${prefix}-${dir}-${i}`;
+                grid.innerHTML += `
+                    <div id="container-${frameId}" class="sprite-upload-container w-16 h-16 rounded-md bg-gray-200 flex items-center justify-center mx-auto">
+                        <img id="preview-${frameId}" src="${entity.sprites[dir][i].src}" class="w-full h-full object-contain">
+                        <div class="overlay">${langDict.upload_frame}</div>
+                        <input type="file" id="input-${frameId}" class="hidden" accept="image/*">
+                    </div>
+                `;
+                if (i === 0) {
+                     grid.innerHTML += `<div class="text-gray-400 text-2xl text-center">+</div>`;
+                }
+            }
+        });
+        
+        directions.forEach(dir => {
+            for (let i = 0; i < 2; i++) {
+                const frameId = `${prefix}-${dir}-${i}`;
+                const container = document.getElementById(`container-${frameId}`);
+                const input = document.getElementById(`input-${frameId}`);
+                const preview = document.getElementById(`preview-${frameId}`);
+                
+                container.onclick = () => input.click();
+                
+                input.onchange = (e) => {
+                    const file = e.target.files[0];
+                    if(file) {
+                        const reader = new FileReader();
+                        reader.onload = (re) => {
+                            entity.sprites[dir][i].src = re.target.result;
+                            preview.src = re.target.result;
+                            entity.sprites[dir][i].onload = () => this.draw();
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                };
+            }
+        });
+    }
+
+    // 渲染
+    draw() {
+        this.ctx.webkitImageSmoothingEnabled = false;
+        this.ctx.mozImageSmoothingEnabled = false;
+        this.ctx.msImageSmoothingEnabled = false;
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        const map = this.gameData.maps[this.currentLayer];
+        if (!map) return;
+        
+        // 1. Draw base path tiles
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                this.ctx.drawImage(this.textures.path, x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
+            }
+        }
+
+        // 2. Draw background objects
+        this.gameData.objects.forEach(obj => {
+            if (obj.type === 'background' && obj.layer === this.currentLayer && !obj.hidden) {
+                const objWidth = (obj.width || obj.size || 1) * this.cellSize;
+                const objHeight = (obj.height || obj.size || 1) * this.cellSize;
+                this.ctx.drawImage(obj.sprite, obj.x * this.cellSize, obj.y * this.cellSize, objWidth, objHeight);
+            }
+        });
+
+        // 3. Draw upper-layer tiles (walls)
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                const tileIndex = y * map.width + x;
+                const tileType = map.tiles[tileIndex];
+                if (tileType === 2) {
+                    this.ctx.drawImage(this.textures.wall, x * this.cellSize, y * this.cellSize, this.cellSize, this.cellSize);
+                }
+            }
+        }
+        
+        // 4. Draw other objects in correct order (excluding background)
+        const drawOrder = { 'portal': 1, 'scenery': 2, 'shop': 2, 'gem': 3, 'npc': 3, 'dialogueNpc': 3 };
+        const sortedObjects = [...this.gameData.objects]
+            .filter(obj => obj.type !== 'background' && obj.layer === this.currentLayer && !obj.hidden)
+            .sort((a, b) => (drawOrder[a.type] || 3) - (drawOrder[b.type] || 3));
+
+        sortedObjects.forEach(obj => {
+            if (obj.type === 'npc' || obj.type === 'dialogueNpc') {
+                const dir = obj.type === 'npc' ? obj.dir : 'still';
+                const sprite = obj.sprites[dir][obj.animationFrame];
+                const size = (obj.size || 1) * this.cellSize;
+                this.ctx.drawImage(sprite, obj.x * this.cellSize, (obj.y - (obj.size - 1)) * this.cellSize, size, size);
+            } else {
+                 const objWidth = (obj.width || obj.size || 1) * this.cellSize;
+                 const objHeight = (obj.height || obj.size || 1) * this.cellSize;
+                 this.ctx.drawImage(obj.sprite, obj.x * this.cellSize, obj.y * this.cellSize, objWidth, objHeight);
+            }
+        });
+
+        // 5. Draw player
+        if (this.gameData.player.layer === this.currentLayer) {
+             const p = this.gameData.player;
+             const pSize = p.size || 1;
+             const sprite = p.sprites[p.dir][p.animationFrame];
+             this.ctx.drawImage(sprite, p.x * this.cellSize, (p.y - pSize + 1) * this.cellSize, pSize * this.cellSize, pSize * this.cellSize);
+        }
+        
+        // 6. Draw projectiles
+        this.projectiles.forEach(p => {
+             if (p.layer === this.currentLayer) {
+                const size = 4 * (p.life / p.maxLife);
+                this.ctx.fillStyle = 'rgba(0, 180, 255, 0.9)';
+                this.ctx.beginPath();
+                this.ctx.arc(p.x * this.cellSize + this.cellSize / 2, p.y * this.cellSize + this.cellSize / 2, Math.max(1, size), 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        });
+    }
+
+
+    // 游戏逻辑
+    togglePlayMode() {
+        this.isPlaying = !this.isPlaying;
+        const btn = document.getElementById('play-mode-btn');
+        const hud = document.getElementById('game-hud');
+        
+        if (this.isPlaying) {
+            this.startGame();
+            const playBtnText = lang[this.currentLang].stop_game;
+            btn.innerHTML = `<i class="fas fa-stop"></i> <span>${playBtnText}</span>`;
+            btn.classList.replace('bg-green-500', 'bg-red-500');
+            btn.classList.replace('hover:bg-green-600', 'hover:bg-red-600');
+            hud.classList.remove('hidden');
+            hud.classList.add('flex');
+        } else {
+            this.stopGame();
+            const playBtnText = lang[this.currentLang].play_game;
+            btn.innerHTML = `<i class="fas fa-play"></i> <span>${playBtnText}</span>`;
+            btn.classList.replace('bg-red-500', 'bg-green-500');
+            btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+            hud.classList.add('hidden');
+        }
+    }
+    
+    startGame() {
+        // Set the current layer to the player's layer at the start of the game
+        this.changeLayer(this.gameData.player.layer);
+        
+        // If not in fullscreen, update the editor dropdown to reflect the current layer
+        if (!this.isFullscreen) {
+            document.getElementById('map-layer').value = this.currentLayer;
+        }
+
+        this.closeModal('game-over-modal');
+        this.activeQuest = null;
+        this.updateQuestTracker();
+        this.gameData.player.hp = this.gameData.player.maxHp;
+        this.gameData.player.gemsCollected = 0;
+        this.gameData.player.shootCooldown = 0;
+        
+        this.totalGems = this.gameData.objects.filter(o => o.type === 'gem').length;
+        this.defeatedNpcs = 0;
+        this.updateHUD();
+
+        const timerContainer = document.getElementById('hud-timer-container');
+        if (this.gameData.countdown.enabled) {
+            this.gameTimerValue = this.gameData.countdown.duration;
+            timerContainer.classList.remove('hidden');
+        } else {
+            this.gameTimerValue = 0;
+            timerContainer.classList.add('hidden');
+        }
+
+        this.gameData.objects.forEach(obj => {
+            obj.hidden = true;
+            if (obj.type === 'gem' || obj.type === 'npc') {
+                const appearTimer = setTimeout(() => {
+                    obj.hidden = false;
+                    if (obj.type === 'gem') {
+                        this.showGemRadar(lang[this.currentLang].gem_radar_msg.replace('{layer}', obj.layer + 1));
+                        const durationTimer = setTimeout(() => { obj.hidden = true; }, obj.duration * 1000);
+                        this.gameTimers.push(durationTimer);
+                    }
+                }, (obj.appearTime || 0) * 1000);
+                this.gameTimers.push(appearTimer);
+            } else {
+                obj.hidden = false;
+            }
+             if (obj.type === 'npc') {
+                obj.currentHp = obj.hp;
+            }
+             if (obj.type === 'dialogueNpc') {
+                obj.triggered = false;
+                obj.currentQuestIndex = 0;
+            }
+        });
+    }
+
+    stopGame() {
+        this.gameTimers.forEach(timer => clearTimeout(timer));
+        this.gameTimers = [];
+        this.projectiles = [];
+        this.keysPressed = {};
+        this.isPlaying = false;
+
+        // Restore editor state
+        this.gameData.objects.forEach(obj => {
+            obj.hidden = false;
+            if (obj.type === 'npc') {
+                obj.currentHp = obj.hp;
+            }
+        });
+        this.draw();
+    }
+    
+    endGame(reason) {
+        if (!this.isPlaying) return;
+        
+        if (this.activeQuest) {
+            this.failQuest();
+        }
+
+        this.stopGame(); // This will now also restore the editor state
+        
+        const langDict = lang[this.currentLang];
+        document.getElementById('game-over-title').textContent = langDict[reason];
+        
+        const summaryText = `
+            <p>${langDict.summary_npcs_defeated.replace('{count}', this.defeatedNpcs)}</p>
+            <p>${langDict.summary_gems_collected.replace('{count}', this.gameData.player.gemsCollected)}</p>
+        `;
+        document.getElementById('game-summary-text').innerHTML = summaryText;
+
+        this.openModal('game-over-modal');
+        
+        if (this.isFullscreen) {
+            this.toggleFullscreen();
+        } else {
+            // Manually update the button state as togglePlayMode() is not called directly
+            const btn = document.getElementById('play-mode-btn');
+            const playBtnText = lang[this.currentLang].play_game;
+            btn.innerHTML = `<i class="fas fa-play"></i> <span>${playBtnText}</span>`;
+            btn.classList.replace('bg-red-500', 'bg-green-500');
+            btn.classList.replace('hover:bg-red-600', 'hover:bg-green-600');
+            document.getElementById('game-hud').classList.add('hidden');
+        }
+    }
+    
+    showGemRadar(message) {
+        const radar = document.getElementById('gem-radar');
+        radar.textContent = message;
+        setTimeout(() => radar.textContent = '', 5000);
+    }
+
+    toggleFullscreen() {
+        this.isFullscreen = !this.isFullscreen;
+        const appContainer = document.getElementById('app-container');
+        
+        if (this.isFullscreen) {
+            if (this.isPlaying) this.togglePlayMode();
+            appContainer.classList.add('fullscreen');
+            
+            const exitBtn = document.createElement('button');
+            exitBtn.id = 'exit-fullscreen-btn';
+            exitBtn.innerHTML = `<i class="fas fa-times mr-2"></i> ${lang[this.currentLang].exit_fullscreen}`;
+            exitBtn.className = 'fixed top-4 right-4 z-[101] bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 shadow-lg';
+            exitBtn.onclick = () => this.toggleFullscreen();
+            document.body.appendChild(exitBtn);
+
+            const map = this.gameData.maps[this.currentLayer];
+            const containerWidth = window.innerWidth;
+            const containerHeight = window.innerHeight;
+            
+            const ratioX = containerWidth / map.width;
+            const ratioY = containerHeight / map.height;
+            
+            this.cellSize = Math.floor(Math.min(ratioX, ratioY));
+            this.resizeCanvas();
+            this.togglePlayMode();
+
+        } else {
+            if (this.isPlaying) this.togglePlayMode();
+            appContainer.classList.remove('fullscreen');
+            
+            const exitBtn = document.getElementById('exit-fullscreen-btn');
+            if (exitBtn) exitBtn.remove();
+            
+            this.cellSize = this.editorCellSize;
+            this.resizeCanvas();
+        }
+    }
+    
+    updateAnimation(entity, deltaTime) {
+        if (entity.isMoving) {
+            entity.animationTimer += deltaTime;
+            if (entity.animationTimer > 0.25) {
+                entity.animationTimer = 0;
+                entity.animationFrame = (entity.animationFrame + 1) % 2;
+            }
+        } else {
+            entity.animationFrame = 0;
+            entity.animationTimer = 0;
+        }
+    }
+    
+    gameLoop(timestamp) {
+        if (this.isPausedForDialogue || this.isShopOpen) {
+            requestAnimationFrame(this.gameLoop);
+            return;
+        }
+
+        if (!this.lastTime) this.lastTime = timestamp;
+        const deltaTime = (timestamp - this.lastTime) / 1000;
+        this.lastTime = timestamp;
+        
+        if (!this.isPlaying) {
+            this.draw();
+            requestAnimationFrame(this.gameLoop);
+            return;
+        }
+
+        if (this.gameData.player.shootCooldown > 0) this.gameData.player.shootCooldown -= deltaTime;
+        if (this.gameData.player.shootingTimer > 0) this.gameData.player.shootingTimer -= deltaTime;
+
+        if (this.gameData.countdown.enabled) {
+            this.gameTimerValue -= deltaTime;
+            this.updateHUD();
+            if (this.gameTimerValue <= 0) {
+                this.endGame('time_up');
+                return;
+            }
+        }
+
+        if (this.activeQuest && this.activeQuest.questTimer > 0) {
+            this.activeQuest.questTimer -= deltaTime;
+            this.updateHUD();
+            if (this.activeQuest.questTimer <= 0) {
+                this.failQuest();
+            }
+        }
+        
+        this.checkQuestProgress();
+        this.updateNpcs(deltaTime);
+        this.updateProjectiles(deltaTime);
+        this.updateAnimation(this.gameData.player, deltaTime);
+        this.gameData.objects.forEach(obj => {
+            if (obj.type === 'npc' || obj.type === 'dialogueNpc') this.updateAnimation(obj, deltaTime);
+        });
+        
+        this.checkCollisions();
+        
+        this.draw();
+        requestAnimationFrame(this.gameLoop);
+    }
+    
+    handlePlayerMovement(key) {
+        if (this.gameData.player.shootingTimer > 0) return;
+        let { x, y } = this.gameData.player;
+        let moved = false;
+        
+        const moveMap = {
+            'w': { y: -1, dir: 'up' }, 'arrowup': { y: -1, dir: 'up' },
+            's': { y: 1, dir: 'down' }, 'arrowdown': { y: 1, dir: 'down' },
+            'a': { x: -1, dir: 'left' }, 'arrowleft': { x: -1, dir: 'left' },
+            'd': { x: 1, dir: 'right' }, 'arrowright': { x: 1, dir: 'right' },
+        };
+        
+        if (moveMap[key]) {
+            const move = moveMap[key];
+            const newX = x + (move.x || 0);
+            const newY = y + (move.y || 0);
+            this.gameData.player.dir = move.dir;
+            
+            if (this.canMoveTo(this.gameData.player, newX, newY)) {
+                this.gameData.player.x = newX;
+                this.gameData.player.y = newY;
+                moved = true;
+            }
+        }
+        
+        this.gameData.player.isMoving = Object.keys(this.keysPressed).some(k => moveMap[k]);
+
+        if (moved) {
+            this.checkPortal();
+            this.checkDialogueTriggers();
+            this.checkShopInteraction();
+        }
+    }
+    
+    checkPortal() {
+        const p = this.gameData.player;
+        const playerRect = { x: p.x, y: p.y - p.size + 1, width: p.size, height: p.size };
+
+        for (const obj of this.gameData.objects) {
+            if (obj.type === 'portal' && obj.layer === p.layer) {
+                const portalRect = { x: obj.x, y: obj.y, width: obj.width, height: obj.height };
+                
+                // Simple AABB collision check
+                if (playerRect.x < portalRect.x + portalRect.width &&
+                    playerRect.x + playerRect.width > portalRect.x &&
+                    playerRect.y < portalRect.y + portalRect.height &&
+                    playerRect.height + playerRect.y > portalRect.y)
+                {
+                    p.layer = obj.targetLayer;
+                    p.x = obj.targetX;
+                    p.y = obj.targetY;
+                    this.changeLayer(p.layer);
+                    break; // Exit loop after teleporting
+                }
+            }
+        }
+    }
+
+    checkDialogueTriggers() {
+        const p = this.gameData.player;
+        for (const obj of this.gameData.objects) {
+            if (obj.type === 'dialogueNpc' && obj.layer === p.layer) {
+                const dx = Math.abs((p.x + p.size / 2) - (obj.x + obj.size / 2));
+                const dy = Math.abs(p.y - obj.y);
+                const combinedSize = (p.size + obj.size) / 2;
+                if (dx < combinedSize + 0.5 && dy < combinedSize + 0.5) {
+                    this.startDialogue(obj);
+                    break;
+                }
+            }
+        }
+    }
+
+    startDialogue(npc) {
+        this.isPausedForDialogue = true;
+        this.activeDialogueNPC = npc;
+        
+        if (this.activeQuest && this.activeQuest.sourceNpc.id === npc.id && this.activeQuest.objectivesComplete) {
+            const currentQuest = npc.quests[npc.currentQuestIndex];
+            this.dialogueQueue = currentQuest.rewardDialogue && currentQuest.rewardDialogue.length > 0 ? currentQuest.rewardDialogue : [{ speaker: 'npc', text: 'Great job!', portraitSrc: npc.sprites.still[0].src }];
+            this.dialogueType = 'reward';
+        } else {
+            this.dialogueQueue = npc.dialogue;
+            this.dialogueType = 'greeting';
+        }
+        
+        this.currentDialogueIndex = 0;
+        this.displayCurrentDialogueLine();
+        this.openModal('dialogue-modal');
+    }
+
+    advanceDialogue() {
+        this.currentDialogueIndex++;
+        if (this.currentDialogueIndex < this.dialogueQueue.length) {
+            this.displayCurrentDialogueLine();
+        } else {
+            this.closeModal('dialogue-modal');
+            
+            const dialogueEndActions = {
+                'greeting': () => this.showQuestSelection(this.activeDialogueNPC),
+                'accept': () => this.activateQuest(this.activeDialogueNPC),
+                'reward': () => this.completeQuest()
+            };
+            
+            if (dialogueEndActions[this.dialogueType]) {
+                dialogueEndActions[this.dialogueType]();
+            } else {
+                 this.isPausedForDialogue = false;
+                 this.activeDialogueNPC = null;
+            }
+        }
+    }
+
+    displayCurrentDialogueLine() {
+        const line = this.dialogueQueue[this.currentDialogueIndex];
+        const container = document.getElementById('dialogue-content');
+        
+        const npcPortrait = `<img src="${line.speaker === 'npc' ? line.portraitSrc : this.gameData.player.sprites.down[0].src}" class="w-24 h-24 object-contain bg-gray-200 rounded-md p-1">`;
+        const playerPortrait = `<img src="${line.speaker === 'player' ? line.portraitSrc : this.activeDialogueNPC.sprites.still[0].src}" class="w-24 h-24 object-contain bg-gray-200 rounded-md p-1">`;
+        const text = `<p class="text-lg flex-1 mx-4 p-4 bg-gray-100 rounded-lg">${line.text}</p>`;
+
+        if (line.speaker === 'npc') {
+            container.innerHTML = npcPortrait + text + `<div class="w-24 h-24"></div>`;
+        } else {
+            container.innerHTML = `<div class="w-24 h-24"></div>` + text + playerPortrait;
+        }
+    }
+
+    shoot() {
+        if (this.gameData.player.shootCooldown > 0) return;
+        this.gameData.player.shootCooldown = 0.5;
+        this.gameData.player.shootingTimer = 0.3;
+
+        const p = this.gameData.player;
+        const life = 2;
+        const proj = { x: p.x, y: p.y, dir: p.dir, speed: 5, layer: p.layer, life: life, maxLife: life };
+        this.projectiles.push(proj);
+    }
+    
+    updateProjectiles(deltaTime) {
+        this.projectiles.forEach((p, index) => {
+            p.life -= deltaTime;
+            if (p.life <= 0) {
+                this.projectiles.splice(index, 1);
+                return;
+            }
+            let dx = 0, dy = 0;
+            if (p.dir === 'up') dy = -1;
+            if (p.dir === 'down') dy = 1;
+            if (p.dir === 'left') dx = -1;
+            if (p.dir === 'right') dx = 1;
+            
+            p.x += dx * p.speed * deltaTime;
+            p.y += dy * p.speed * deltaTime;
+        });
+    }
+
+    updateNpcs(deltaTime) {
+        this.gameData.objects.forEach(obj => {
+            if (obj.type === 'npc' && !obj.hidden) {
+                obj.moveCooldown -= deltaTime;
+                if (obj.moveCooldown <= 0) {
+                    obj.moveCooldown = obj.speed;
+                    const moves = [
+                        {x:0,y:1, dir: 'down'}, {x:0,y:-1, dir: 'up'}, 
+                        {x:1,y:0, dir: 'right'}, {x:-1,y:0, dir: 'left'}
+                    ];
+                    const move = moves[Math.floor(Math.random() * moves.length)];
+                    const newX = obj.x + move.x;
+                    const newY = obj.y + move.y;
+                    obj.dir = move.dir;
+                    if(this.canMoveTo(obj, newX, newY)) {
+                        obj.x = newX;
+                        obj.y = newY;
+                        obj.isMoving = true;
+                    } else {
+                        obj.isMoving = false;
+                    }
+                } else {
+                    obj.isMoving = false;
+                }
+            }
+        });
+    }
+
+    checkCollisions() {
+        const p = this.gameData.player;
+        const playerSize = p.size || 1;
+        const playerRect = { x: p.x, y: p.y - playerSize + 1, width: playerSize, height: playerSize };
+
+        // Projectile-NPC collision
+        this.projectiles.forEach((proj, projIndex) => {
+            this.gameData.objects.forEach(obj => {
+                if (obj.type === 'npc' && !obj.hidden && obj.layer === proj.layer) {
+                    const objSize = obj.size || 1;
+                    const objRect = { x: obj.x, y: obj.y - objSize + 1, width: objSize, height: objSize };
+                    
+                    const projCenterX = proj.x + 0.5;
+                    const projCenterY = proj.y + 0.5;
+
+                    if (projCenterX >= objRect.x && projCenterX < objRect.x + objRect.width &&
+                        projCenterY >= objRect.y && projCenterY < objRect.y + objRect.height) {
+                        
+                        const damageDealt = Math.max(1, p.shootDamage - (obj.defense || 0));
+                        obj.currentHp -= damageDealt;
+                        if (obj.currentHp <= 0) {
+                            obj.hidden = true;
+                            this.defeatedNpcs++;
+                        }
+                        this.projectiles.splice(projIndex, 1);
+                    }
+                }
+            });
+        });
+        
+        // Player-object collision
+        this.gameData.objects.forEach(obj => {
+            if (!obj.hidden && obj.layer === p.layer) {
+                let objRect;
+                const isCharacter = obj.type === 'npc' || obj.type === 'dialogueNpc';
+
+                if (isCharacter) {
+                    const objSize = obj.size || 1;
+                    objRect = { x: obj.x, y: obj.y - objSize + 1, width: objSize, height: objSize };
+                } else { 
+                    objRect = { x: obj.x, y: obj.y, width: obj.width || obj.size || 1, height: obj.height || obj.size || 1 };
+                }
+
+                if (playerRect.x < objRect.x + objRect.width &&
+                    playerRect.x + playerRect.width > objRect.x &&
+                    playerRect.y < objRect.y + objRect.height &&
+                    playerRect.height + playerRect.y > objRect.y) {
+                    
+                    if (obj.type === 'npc') {
+                        const damageTaken = Math.max(1, obj.damage - p.defense);
+                        p.hp -= damageTaken;
+                        obj.currentHp -= 20; 
+                        if (obj.currentHp <= 0) {
+                            obj.hidden = true;
+                            this.defeatedNpcs++;
+                        }
+
+                        if (p.hp <= 0) {
+                            p.hp = 0;
+                            this.endGame('defeated');
+                        }
+                    } else if (obj.type === 'gem') {
+                        p.gemsCollected++;
+                        obj.hidden = true;
+                    }
+                    this.updateHUD();
+                }
+            }
+        });
+    }
+
+    isWalkable(x, y, layer) {
+        const map = this.gameData.maps[layer];
+        if (!map || x < 0 || x >= map.width || y < 0 || y >= map.height) {
+            return false;
+        }
+        const tileIndex = Math.floor(y) * map.width + Math.floor(x);
+        return map.tiles[tileIndex] !== 2;
+    }
+    
+    canMoveTo(actor, newX, newY) {
+        const isCharacter = actor === this.gameData.player || actor.type === 'npc' || actor.type === 'dialogueNpc';
+        
+        const actorW = isCharacter ? (actor.size || 1) : (actor.width || 1);
+        const actorH = isCharacter ? (actor.size || 1) : (actor.height || 1);
+        const startY = isCharacter ? (newY - actorH + 1) : newY;
+        
+        const layer = actor.layer;
+
+        for (let y = Math.floor(startY); y < startY + actorH; y++) {
+            for (let x = Math.floor(newX); x < newX + actorW; x++) {
+                if (!this.isWalkable(x, y, layer)) {
+                    return false;
+                }
+            }
+        }
+
+        const targetRect = { x: newX, y: startY, width: actorW, height: actorH };
+        for (const obj of this.gameData.objects) {
+            if ((obj.type === 'scenery' || obj.type === 'shop') && obj.layer === layer && obj.id !== actor.id) {
+                const sceneryRect = { x: obj.x, y: obj.y, width: obj.width || 1, height: obj.height || 1 };
+                if (targetRect.x < sceneryRect.x + sceneryRect.width &&
+                    targetRect.x + targetRect.width > sceneryRect.x &&
+                    targetRect.y < sceneryRect.y + sceneryRect.height &&
+                    targetRect.height + targetRect.y > sceneryRect.y) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
+
+    updateHUD() {
+        document.getElementById('hud-hp').textContent = `${this.gameData.player.hp}/${this.gameData.player.maxHp}`;
+        document.getElementById('hud-atk').textContent = this.gameData.player.shootDamage;
+        document.getElementById('hud-def').textContent = this.gameData.player.defense;
+        document.getElementById('hud-gems').textContent = `${this.gameData.player.gemsCollected}/${this.totalGems}`;
+        document.getElementById('hud-bounty').textContent = this.gameData.player.bounty;
+        
+        const gameTimerContainer = document.getElementById('hud-timer-container');
+        if (this.gameData.countdown.enabled) {
+            gameTimerContainer.classList.remove('hidden');
+            document.getElementById('hud-timer').textContent = Math.ceil(Math.max(0, this.gameTimerValue));
+        } else {
+            gameTimerContainer.classList.add('hidden');
+        }
+
+        const questTimerContainer = document.getElementById('hud-quest-timer-container');
+        if (this.activeQuest && this.activeQuest.questTimer > 0) {
+            questTimerContainer.classList.remove('hidden');
+            document.getElementById('hud-quest-timer').textContent = Math.ceil(Math.max(0, this.activeQuest.questTimer));
+        } else {
+            questTimerContainer.classList.add('hidden');
+        }
+
+        if (this.totalGems > 0 && this.gameData.player.gemsCollected === this.totalGems) {
+            this.endGame('time_up');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.editor = new GameEditor();
+});
+</script>
+<script>
+// A simple IndexedDB wrapper
+const dbManager = {
+  db: null,
+  dbName: 'GardenTreasureDB',
+  storeName: 'gameStore',
+
+  async openDB() {
+    return new Promise((resolve, reject) => {
+      if (this.db) {
+        return resolve(this.db);
+      }
+      const request = indexedDB.open(this.dbName, 1);
+
+      request.onerror = (event) => {
+        console.error("IndexedDB error:", event.target.error);
+        reject("IndexedDB error");
+      };
+
+      request.onsuccess = (event) => {
+        this.db = event.target.result;
+        resolve(this.db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName);
+        }
+      };
+    });
+  },
+
+  async setItem(key, value) {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.put(value, key);
+
+      request.onsuccess = () => resolve();
+      request.onerror = (event) => {
+          console.error('Error setting item in IndexedDB:', event.target.error);
+          reject(event.target.error);
+      };
+    });
+  },
+};
+
+// 扩展 GameEditor 类
+Object.assign(GameEditor.prototype, {
+    showQuestSelection(npc) {
+        const questList = document.getElementById('quest-selection-list');
+        questList.innerHTML = '';
+        const questIndex = npc.currentQuestIndex;
+        
+        if (!this.activeQuest && npc.quests && questIndex < npc.quests.length) {
+            const quest = npc.quests[questIndex];
+            const questItem = document.createElement('div');
+            questItem.className = 'p-3 bg-blue-100 hover:bg-blue-200 rounded-lg cursor-pointer';
+            questItem.textContent = quest.title;
+            questItem.onclick = () => this.startQuestDialogue(npc, questIndex);
+            questList.appendChild(questItem);
+            this.openModal('quest-selection-modal');
+        } else {
+            // No available quests or player is busy, so just end the interaction
+            this.isPausedForDialogue = false;
+            this.activeDialogueNPC = null;
+        }
+    },
+
+    startQuestDialogue(npc, questIndex) {
+        this.closeModal('quest-selection-modal');
+        const quest = npc.quests[questIndex];
+        this.dialogueQueue = quest.dialogue;
+        this.dialogueType = 'accept';
+        this.currentDialogueIndex = 0;
+        this.displayCurrentDialogueLine();
+        this.openModal('dialogue-modal');
+    },
+
+    buildDialogueEditor(containerId, dialogueArray) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        const langDict = lang[this.currentLang];
+
+        dialogueArray.forEach((line, index) => {
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'dialogue-line-editor p-2 border rounded bg-white relative';
+            lineDiv.dataset.index = index;
+            lineDiv.innerHTML = `
+                <button class="delete-dialogue-line absolute top-1 right-1 text-red-500 hover:text-red-700">&times;</button>
+                <div class="grid grid-cols-3 gap-2 items-center">
+                     <div>
+                        <label class="block text-sm font-medium">${langDict.speaker}</label>
+                        <select class="speaker-select w-full p-1 border rounded">
+                            <option value="npc" ${line.speaker === 'npc' ? 'selected' : ''}>${langDict.speaker_npc}</option>
+                            <option value="player" ${line.speaker === 'player' ? 'selected' : ''}>${langDict.speaker_player}</option>
+                        </select>
+                    </div>
+                    <div>
+                         <label class="block text-sm font-medium">${langDict.dialogue_portrait}</label>
+                         <div class="sprite-upload-container w-16 h-16">
+                            <img src="${line.portraitSrc}" class="w-full h-full object-contain dialogue-portrait-preview">
+                            <div class="overlay">${langDict.upload_sprite}</div>
+                            <input type="file" class="hidden dialogue-portrait-input" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="col-span-3">
+                         <label class="block text-sm font-medium">${langDict.dialogue_text}</label>
+                        <input type="text" class="dialogue-text-input w-full p-1 border rounded" value="${line.text}">
+                    </div>
+                </div>
+            `;
+            container.appendChild(lineDiv);
+        });
+        
+        container.querySelectorAll('.delete-dialogue-line').forEach(btn => {
+            btn.onclick = () => {
+                const index = parseInt(btn.closest('.dialogue-line-editor').dataset.index);
+                dialogueArray.splice(index, 1);
+                this.buildDialogueEditor(containerId, dialogueArray);
+            };
+        });
+        container.querySelectorAll('.sprite-upload-container').forEach(uploadContainer => {
+            uploadContainer.onclick = () => uploadContainer.querySelector('input').click();
+        });
+        container.querySelectorAll('.dialogue-portrait-input').forEach((input, index) => {
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (re) => {
+                        dialogueArray[index].portraitSrc = re.target.result;
+                        input.closest('.sprite-upload-container').querySelector('img').src = re.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+        });
+    },
+
+    addDialogueLine(dialogueArray, containerId) {
+        const langDict = lang[this.currentLang];
+        dialogueArray.push({
+            speaker: 'npc',
+            text: langDict.dialogue_text,
+            portraitSrc: 'https://placehold.co/96x96/a5f3fc/083344?text=NPC'
+        });
+        this.buildDialogueEditor(containerId, dialogueArray);
+    },
+
+    saveDialogue(containerId, dialogueArray) {
+        const editorLines = document.querySelectorAll(`#${containerId} .dialogue-line-editor`);
+        const newDialogue = [];
+        editorLines.forEach((lineDiv, index) => {
+            newDialogue.push({
+                speaker: lineDiv.querySelector('.speaker-select').value,
+                text: lineDiv.querySelector('.dialogue-text-input').value,
+                portraitSrc: dialogueArray[index].portraitSrc
+            });
+        });
+        dialogueArray.length = 0;
+        dialogueArray.push(...newDialogue);
+    },
+    
+    buildQuestEditor(npc) {
+        const container = document.getElementById('quest-list-editor');
+        container.innerHTML = '';
+        const langDict = lang[this.currentLang];
+
+        if (!npc.quests || npc.quests.length === 0) {
+            container.innerHTML = `<p class="text-gray-500 italic text-center">No quests defined.</p>`;
+            return;
+        }
+
+        npc.quests.forEach((quest, index) => {
+            const questDiv = document.createElement('div');
+            questDiv.className = 'flex items-center justify-between p-2 bg-white rounded-md';
+            questDiv.innerHTML = `
+                <span class="font-semibold">${langDict.quest_prefix}${index + 1}: ${quest.title}</span>
+                <div>
+                    <button data-index="${index}" class="move-quest-up-btn text-gray-500 hover:text-gray-700 mr-2" ${index === 0 ? 'disabled' : ''} title="Move Up"><i class="fas fa-arrow-up"></i></button>
+                    <button data-index="${index}" class="move-quest-down-btn text-gray-500 hover:text-gray-700 mr-2" ${index === npc.quests.length - 1 ? 'disabled' : ''} title="Move Down"><i class="fas fa-arrow-down"></i></button>
+                    <button data-index="${index}" class="edit-quest-btn text-blue-500 hover:text-blue-700 mr-2" title="${langDict.edit_quest}"><i class="fas fa-edit"></i></button>
+                    <button data-index="${index}" class="delete-quest-btn text-red-500 hover:text-red-700" title="${langDict.delete_object}"><i class="fas fa-trash"></i></button>
+                </div>
+            `;
+            container.appendChild(questDiv);
+        });
+
+        container.querySelectorAll('.edit-quest-btn').forEach(btn => btn.onclick = () => this.editQuest(npc, parseInt(btn.dataset.index)));
+        container.querySelectorAll('.delete-quest-btn').forEach(btn => btn.onclick = () => this.deleteQuest(npc, parseInt(btn.dataset.index)));
+        container.querySelectorAll('.move-quest-up-btn').forEach(btn => btn.onclick = () => this.moveQuest(npc, parseInt(btn.dataset.index), -1));
+        container.querySelectorAll('.move-quest-down-btn').forEach(btn => btn.onclick = () => this.moveQuest(npc, parseInt(btn.dataset.index), 1));
+    },
+
+    addQuest(npc) {
+        const langDict = lang[this.currentLang];
+        const newQuest = {
+            title: `New Quest ${npc.quests.length + 1}`,
+            bounty: 0,
+            timeLimit: 0,
+            objectives: { collectGems: 0, defeatNpcs: 0, goToLayer: -1, reachLocation: null },
+            dialogue: [{
+                speaker: 'npc',
+                text: langDict.dialogue_text,
+                portraitSrc: 'https://placehold.co/96x96/a5f3fc/083344?text=NPC'
+            }],
+            rewardDialogue: [{
+                speaker: 'npc',
+                text: 'Thank you!',
+                portraitSrc: 'https://placehold.co/96x96/a5f3fc/083344?text=NPC'
+            }]
+        };
+        npc.quests.push(newQuest);
+        this.buildQuestEditor(npc);
+        this.editQuest(npc, npc.quests.length - 1);
+    },
+
+    editQuest(npc, index) {
+        const quest = npc.quests[index];
+        if (!quest) return;
+
+        const editorDiv = document.getElementById('quest-details-editor');
+        const langDict = lang[this.currentLang];
+        
+        document.getElementById('editing-quest-index').value = index;
+        document.getElementById('quest-editor-title').textContent = `${langDict.edit_quest}: ${quest.title}`;
+        document.getElementById('quest-title-input').value = quest.title;
+        document.getElementById('quest-bounty').value = quest.bounty || 0;
+        document.getElementById('quest-time-limit').value = quest.timeLimit || 0;
+        document.getElementById('quest-gems').value = quest.objectives.collectGems || 0;
+        document.getElementById('quest-npcs').value = quest.objectives.defeatNpcs || 0;
+        document.getElementById('quest-layer').value = quest.objectives.goToLayer > -1 ? quest.objectives.goToLayer + 1 : '';
+        
+        if (quest.objectives.reachLocation) {
+            document.getElementById('quest-loc-x').value = quest.objectives.reachLocation.x;
+            document.getElementById('quest-loc-y').value = quest.objectives.reachLocation.y;
+            document.getElementById('quest-loc-layer').value = quest.objectives.reachLocation.layer + 1;
+        } else {
+            document.getElementById('quest-loc-x').value = '';
+            document.getElementById('quest-loc-y').value = '';
+            document.getElementById('quest-loc-layer').value = '';
+        }
+
+        this.buildDialogueEditor('quest-dialogue-editor-container', quest.dialogue);
+        document.getElementById('add-quest-dialogue-line-btn').onclick = () => this.addDialogueLine(quest.dialogue, 'quest-dialogue-editor-container');
+        
+        this.buildDialogueEditor('quest-reward-dialogue-editor-container', quest.rewardDialogue);
+        document.getElementById('add-quest-reward-dialogue-line-btn').onclick = () => this.addDialogueLine(quest.rewardDialogue, 'quest-reward-dialogue-editor-container');
+
+        document.getElementById('save-quest-details-btn').onclick = () => this.saveQuestDetails(npc);
+        document.getElementById('cancel-quest-details-btn').onclick = () => {
+            editorDiv.classList.add('hidden');
+        };
+
+        editorDiv.classList.remove('hidden');
+    },
+
+    saveQuestDetails(npc) {
+        const index = parseInt(document.getElementById('editing-quest-index').value);
+        if (isNaN(index) || !npc.quests[index]) return;
+
+        const quest = npc.quests[index];
+        quest.title = document.getElementById('quest-title-input').value;
+        quest.bounty = parseInt(document.getElementById('quest-bounty').value) || 0;
+        quest.timeLimit = parseInt(document.getElementById('quest-time-limit').value) || 0;
+        quest.objectives.collectGems = parseInt(document.getElementById('quest-gems').value) || 0;
+        quest.objectives.defeatNpcs = parseInt(document.getElementById('quest-npcs').value) || 0;
+        const goToLayer = parseInt(document.getElementById('quest-layer').value);
+        quest.objectives.goToLayer = isNaN(goToLayer) ? -1 : goToLayer - 1;
+        
+        const locX = parseInt(document.getElementById('quest-loc-x').value);
+        const locY = parseInt(document.getElementById('quest-loc-y').value);
+        const locLayer = parseInt(document.getElementById('quest-loc-layer').value);
+        if (!isNaN(locX) && !isNaN(locY) && !isNaN(locLayer)) {
+            quest.objectives.reachLocation = { x: locX, y: locY, layer: locLayer - 1 };
+        } else {
+            quest.objectives.reachLocation = null;
+        }
+        
+        this.saveDialogue('quest-dialogue-editor-container', quest.dialogue);
+        this.saveDialogue('quest-reward-dialogue-editor-container', quest.rewardDialogue);
+
+        document.getElementById('quest-details-editor').classList.add('hidden');
+        this.buildQuestEditor(npc);
+    },
+
+    deleteQuest(npc, index) {
+        npc.quests.splice(index, 1);
+        this.buildQuestEditor(npc);
+        document.getElementById('quest-details-editor').classList.add('hidden');
+    },
+
+    moveQuest(npc, index, direction) {
+        if (direction === -1 && index > 0) {
+            [npc.quests[index], npc.quests[index - 1]] = [npc.quests[index - 1], npc.quests[index]];
+        } else if (direction === 1 && index < npc.quests.length - 1) {
+            [npc.quests[index], npc.quests[index + 1]] = [npc.quests[index + 1], npc.quests[index]];
+        }
+        this.buildQuestEditor(npc);
+        document.getElementById('quest-details-editor').classList.add('hidden');
+    },
+    
+    activateQuest(npc) {
+        if (!npc.quests || npc.currentQuestIndex >= npc.quests.length) return;
+        const questData = npc.quests[npc.currentQuestIndex];
+
+        this.activeQuest = {
+            sourceNpc: npc,
+            title: questData.title,
+            timeLimit: questData.timeLimit,
+            questTimer: questData.timeLimit > 0 ? questData.timeLimit : -1,
+            objectives: JSON.parse(JSON.stringify(questData.objectives)),
+            objectivesComplete: false,
+            progress: {
+                gemsStart: this.gameData.player.gemsCollected,
+                npcsStart: this.defeatedNpcs,
+                subTasksCompleted: {}
+            },
+        };
+        this.updateQuestTracker();
+        this.updateHUD();
+        this.isPausedForDialogue = false;
+        this.activeDialogueNPC = null;
+    },
+
+    completeQuest() {
+        if (!this.activeQuest) return;
+        const sourceNpc = this.activeQuest.sourceNpc;
+        const currentQuestData = sourceNpc.quests[sourceNpc.currentQuestIndex];
+        this.gameData.player.bounty += currentQuestData.bounty || 0;
+        sourceNpc.currentQuestIndex++;
+        this.updateHUD();
+        this.showGemRadar(lang[this.currentLang].quest_complete);
+        this.activeQuest = null;
+        this.updateQuestTracker();
+        this.isPausedForDialogue = false;
+        this.activeDialogueNPC = null;
+    },
+
+    failQuest() {
+        if (!this.activeQuest) return;
+        this.showGemRadar(lang[this.currentLang].quest_failed);
+        this.activeQuest = null;
+        this.updateQuestTracker();
+        this.updateHUD();
+    },
+    
+    updateQuestTracker() {
+        const tracker = document.getElementById('quest-tracker');
+        if (!this.activeQuest) {
+            tracker.classList.add('hidden');
+            return;
+        }
+        
+        tracker.classList.remove('hidden');
+        document.getElementById('quest-title').textContent = this.activeQuest.title;
+        const objectivesList = document.getElementById('quest-objectives');
+        objectivesList.innerHTML = '';
+        const langDict = lang[this.currentLang];
+        
+        if (this.activeQuest.objectivesComplete) {
+            objectivesList.innerHTML = `<li class="text-green-400">${langDict.quest_return_to_npc.replace('{npcName}', this.activeQuest.sourceNpc.name)}</li>`;
+            return;
+        }
+        
+        const objectives = this.activeQuest.objectives;
+        let allComplete = true;
+
+        if (objectives.collectGems > 0) {
+            const currentCount = this.gameData.player.gemsCollected - this.activeQuest.progress.gemsStart;
+            const complete = currentCount >= objectives.collectGems;
+            if(!complete) allComplete = false;
+            objectivesList.innerHTML += `<li class="${complete ? 'line-through text-gray-400' : ''}">${langDict.quest_collect_gems} ${currentCount}/${objectives.collectGems}</li>`;
+        }
+        if (objectives.defeatNpcs > 0) {
+            const currentCount = this.defeatedNpcs - this.activeQuest.progress.npcsStart;
+            const complete = currentCount >= objectives.defeatNpcs;
+            if(!complete) allComplete = false;
+            objectivesList.innerHTML += `<li class="${complete ? 'line-through text-gray-400' : ''}">${langDict.quest_defeat_npcs} ${currentCount}/${objectives.defeatNpcs}</li>`;
+        }
+        if (objectives.goToLayer > -1) {
+            const complete = this.gameData.player.layer === objectives.goToLayer;
+            if(!complete) allComplete = false;
+            const layerName = `${langDict.layer_prefix}${objectives.goToLayer + 1}${langDict.layer_suffix}`;
+            objectivesList.innerHTML += `<li class="${complete ? 'line-through text-gray-400' : ''}">${langDict.quest_go_to_layer} ${layerName}</li>`;
+        }
+        if (objectives.reachLocation) {
+            const {x, y, layer} = objectives.reachLocation;
+            const key = `reach_${x}_${y}_${layer}`;
+            if (this.gameData.player.x === x && this.gameData.player.y === y && this.gameData.player.layer === layer) {
+                this.activeQuest.progress.subTasksCompleted[key] = true;
+            }
+            const complete = !!this.activeQuest.progress.subTasksCompleted[key];
+            if(!complete) allComplete = false;
+             const layerName = `${langDict.layer_prefix}${layer + 1}${langDict.layer_suffix}`;
+            objectivesList.innerHTML += `<li class="${complete ? 'line-through text-gray-400' : ''}">${langDict.quest_reach_location} (${x}, ${y}, ${layerName})</li>`;
+        }
+        
+        if(allComplete && !this.activeQuest.objectivesComplete) {
+            this.activeQuest.objectivesComplete = true;
+            this.updateQuestTracker(); // Re-render to show "return to NPC" message
+        }
+    },
+    
+    checkQuestProgress() {
+        if (this.isPlaying && this.activeQuest && !this.activeQuest.objectivesComplete) {
+            this.updateQuestTracker();
+        }
+    },
+
+    checkShopInteraction() {
+        const p = this.gameData.player;
+        for (const obj of this.gameData.objects) {
+            if (obj.type === 'shop' && obj.layer === p.layer) {
+                 const dx = Math.abs((p.x + p.size / 2) - (obj.x + obj.width / 2));
+                 const dy = Math.abs(p.y - (obj.y + obj.height -1) ); // Check against bottom edge of shop
+                 if (dx < (p.size + obj.width) / 2 + 0.5 && dy < (p.size / 2) + 0.5) {
+                    this.openShopModal();
+                    break;
+                 }
+            }
+        }
+    },
+
+    openShopModal() {
+        if (this.isShopOpen) return;
+        this.openModal('shop-modal');
+        const shopItemsContainer = document.getElementById('shop-items');
+        shopItemsContainer.innerHTML = '';
+        const langDict = lang[this.currentLang];
+        const p = this.gameData.player;
+
+        const items = [
+            { id: 'hp', name: langDict.shop_item_hp, cost: 50 * (p.maxHp / 100) },
+            { id: 'def', name: langDict.shop_item_def, cost: 100 * (p.defense + 1) },
+            { id: 'atk', name: langDict.shop_item_atk, cost: 75 * (p.shootDamage / 5) }
+        ];
+
+        items.forEach(item => {
+            const cost = Math.floor(item.cost);
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'flex justify-between items-center p-2 bg-gray-100 rounded';
+            itemDiv.innerHTML = `
+                <span>${item.name}</span>
+                <div class="flex items-center space-x-2">
+                    <span class="font-semibold text-yellow-600">${langDict.shop_cost.replace('{cost}', cost)}</span>
+                    <button data-item-id="${item.id}" data-cost="${cost}" class="buy-item-btn bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">${langDict.shop_buy}</button>
+                </div>
+            `;
+            shopItemsContainer.appendChild(itemDiv);
+        });
+
+        shopItemsContainer.querySelectorAll('.buy-item-btn').forEach(btn => {
+            btn.onclick = () => {
+                const itemId = btn.dataset.itemId;
+                const cost = parseInt(btn.dataset.cost);
+                this.buyShopItem(itemId, cost);
+            };
+        });
+    },
+
+    buyShopItem(itemId, cost) {
+        if (this.gameData.player.bounty >= cost) {
+            this.gameData.player.bounty -= cost;
+            switch(itemId) {
+                case 'hp': 
+                    this.gameData.player.maxHp += 10;
+                    this.gameData.player.hp += 10;
+                    break;
+                case 'def': 
+                    this.gameData.player.defense += 1;
+                    break;
+                case 'atk': 
+                    this.gameData.player.shootDamage += 5;
+                    break;
+            }
+            this.updateHUD();
+            this.closeModal('shop-modal');
+            this.openShopModal(); // Re-open to refresh costs
+        } else {
+            alert(lang[this.currentLang].not_enough_bounty);
+        }
+    },
+
+
+    saveGameForPlay: async function() {
+        const dataToSave = this.serializeState();
+        try {
+            await dbManager.setItem('publishedGame', dataToSave);
+            alert(lang[this.currentLang].game_published_success);
+        } catch (error) {
+            console.error("Failed to publish game:", error);
+            alert("Failed to publish game due to a storage error. The game data might be too large.");
+        }
+    },
+
+    saveGameData: function() {
+        const serializableData = this.serializeState();
+        const jsonString = JSON.stringify(serializableData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `garden-treasure-data-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    serializeState: function() {
+        const plainGameData = JSON.parse(JSON.stringify(this.gameData));
+
+        plainGameData.player.sprites = {};
+        for (const dir in this.gameData.player.sprites) {
+            plainGameData.player.sprites[dir] = this.gameData.player.sprites[dir].map(img => img.src);
+        }
+        
+        plainGameData.objects.forEach((obj, index) => {
+            const originalObj = this.gameData.objects[index];
+            if (obj.type === 'npc' || obj.type === 'dialogueNpc') {
+                obj.sprites = {};
+                for (const dir in originalObj.sprites) {
+                    obj.sprites[dir] = originalObj.sprites[dir].map(img => img.src);
+                }
+            } else if (originalObj.sprite) {
+                obj.sprite = { src: originalObj.sprite.src };
+            }
+        });
+
+        return {
+            lang: this.currentLang,
+            gameData: plainGameData,
+            textures: {
+                path: this.textures.path.src,
+                wall: this.textures.wall.src,
+            }
+        };
+    },
+
+    loadGameData: function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const loadedState = JSON.parse(e.target.result);
+                this.rehydrateData(loadedState);
+            } catch (error) {
+                console.error("加载JSON文件失败:", error);
+                alert(lang[this.currentLang].error_json_load);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    },
+
+    rehydrateData: function(loadedState) {
+        const { gameData, textures, lang: loadedLang } = loadedState;
+        
+        const imagePromises = [];
+
+        const loadImage = (src) => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => {
+                    console.warn(`Failed to load image: ${src}, using placeholder.`);
+                    img.src = 'https://placehold.co/64x64/ff0000/ffffff?text=Error';
+                    resolve(img);
+                };
+                img.src = src;
+            });
+        };
+
+        Object.keys(textures).forEach(key => {
+            imagePromises.push(loadImage(textures[key]).then(img => { this.textures[key] = img; }));
+        });
+
+        const playerSprites = { up:[], down:[], left:[], right:[] };
+        for (const dir in gameData.player.sprites) {
+            gameData.player.sprites[dir].forEach(src => {
+                imagePromises.push(loadImage(src).then(img => playerSprites[dir].push(img)));
+            });
+        }
+        gameData.player.sprites = playerSprites;
+
+        gameData.objects.forEach(obj => {
+            if(obj.type === 'dialogueNpc') {
+                if (obj.quest && !obj.quests) { 
+                     obj.quests = [obj.quest];
+                     delete obj.quest;
+                }
+                if (!obj.quests) obj.quests = [];
+                if (obj.currentQuestIndex === undefined) obj.currentQuestIndex = 0;
+
+                obj.quests.forEach(q => {
+                     if (q.bounty === undefined) q.bounty = 0;
+                     if (q.dialogue === undefined) q.dialogue = [];
+                     if (q.timeLimit === undefined) q.timeLimit = 0;
+                     if (q.rewardDialogue === undefined) q.rewardDialogue = [];
+                });
+            }
+
+            if (obj.type === 'npc' || obj.type === 'dialogueNpc') {
+                const isDialogue = obj.type === 'dialogueNpc';
+                const npcSprites = isDialogue ? { still: [] } : { up:[], down:[], left:[], right:[] };
+                for (const dir in obj.sprites) {
+                    obj.sprites[dir].forEach(src => {
+                        imagePromises.push(loadImage(src).then(img => npcSprites[dir].push(img)));
+                    });
+                }
+                obj.sprites = npcSprites;
+            } else if (obj.sprite && obj.sprite.src) {
+                imagePromises.push(loadImage(obj.sprite.src).then(img => { obj.sprite = img; }));
+            }
+        });
+
+        Promise.all(imagePromises).then(() => {
+            if (!gameData.countdown) gameData.countdown = { enabled: false, duration: 120 };
+            if (!gameData.player.bounty) gameData.player.bounty = 0;
+            if (!gameData.player.defense) gameData.player.defense = 0;
+            if (!gameData.player.shootDamage) gameData.player.shootDamage = 10;
+            
+            this.gameData = gameData;
+            this.currentLayer = 0;
+            this.setLanguage(loadedLang || 'zh');
+            this.updateUIFromData();
+        });
+    },
+
+    updateUIFromData: function() {
+        document.getElementById('player-hp').value = this.gameData.player.maxHp;
+        document.getElementById('player-size').value = this.gameData.player.size;
+        document.getElementById('player-x').value = this.gameData.player.x;
+        document.getElementById('player-y').value = this.gameData.player.y;
+        document.getElementById('player-layer').value = this.gameData.player.layer + 1;
+        
+        document.getElementById('countdown-enabled').checked = this.gameData.countdown.enabled;
+        document.getElementById('countdown-time').value = this.gameData.countdown.duration;
+
+        this.buildAnimationGrid('player', this.gameData.player);
+
+        const currentMap = this.gameData.maps[this.currentLayer];
+        document.getElementById('map-width').value = currentMap.width;
+        document.getElementById('map-height').value = currentMap.height;
+
+        document.getElementById('path-preview').src = this.textures.path.src;
+        document.getElementById('wall-preview').src = this.textures.wall.src;
+        
+        this.updateLayerSelector();
+        this.updateObjectList();
+        
+        this.resizeCanvas();
+        this.draw();
+    }
+});
+</script>
+<style>
+/* 新增的全屏样式 */
+#app-container.fullscreen aside,
+#app-container.fullscreen main > div:first-child:not(#game-ui-overlay) {
+    display: none;
+}
+
+#app-container.fullscreen main {
+    position: fixed;
+    inset: 0;
+    padding: 0;
+    z-index: 100;
+}
+
+#app-container.fullscreen #canvas-container {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+}
+</style>
+</body>
+</html>
